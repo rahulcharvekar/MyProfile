@@ -19,11 +19,11 @@ jobs:
           node-version: '18'
 
       - name: Install dependencies
-        working-directory: Frontend/myprofile
+        working-directory: Frontend/my-profile
         run: npm ci
 
       - name: Build Vite app
-        working-directory: Frontend/myprofile
+        working-directory: Frontend/my-profile
         run: npm run build
 
       - name: Deploy to GitHub Pages
