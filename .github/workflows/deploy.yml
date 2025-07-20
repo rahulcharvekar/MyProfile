@@ -25,7 +25,9 @@ jobs:
       - name: Build Vite app
         working-directory: Frontend/my-profile
         run: npm run build
-
+      - name: 🔍 List dist folder contents
+        run: ls -R Frontend/my-profile/dist
+  
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
