@@ -5,8 +5,10 @@ on:
     branches:
       - main
 
-permissions:
+permissions: 
   contents: write
+  pages: write
+  id-token: write  
 
 jobs:
   deploy:
