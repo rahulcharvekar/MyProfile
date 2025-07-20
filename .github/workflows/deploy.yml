@@ -3,29 +3,31 @@ name: Deploy React to GitHub Pages
 on:
   push:
     branches:
-      - main  # or 'master'
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
+      - name: Set up Node
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
       - name: Install dependencies
         working-directory: Frontend/my-profile
-        run: npm install
+        run: npm ci
 
-      - name: Build React app
+      - name: Build Vite app
         working-directory: Frontend/my-profile
         run: npm run build
-
+      - name: 🔍 List dist folder contents
+        run: ls -R Frontend/my-profile/dist
+  
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
