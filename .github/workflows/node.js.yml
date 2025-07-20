@@ -23,3 +23,7 @@ jobs:
         working-directory: Frontend/my-profile
         run: npm ci
 
+      - name: Build project
+        working-directory: Frontend/my-profile
+        run: npm run build
+
