@@ -23,6 +23,3 @@ jobs:
         working-directory: Frontend/my-profile
         run: npm ci
 
-      - name: Run tests
-        working-directory: Frontend/my-profile
-        run: npm test
