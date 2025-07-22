@@ -3,12 +3,12 @@ import { ChevronLeft, Menu as MenuIcon, AccountCircle } from "@mui/icons-materia
 
 export default function Header({ isSidebarOpen, setIsSidebarOpen, menuAnchor, handleProfileClick, handleClose }) {
   return (
-    <header className="flex justify-between items-center p-4 bg-blue-600 text-white">
-      <div className="flex items-center gap-2">
+    <header class="flex justify-between items-center p-4 bg-indigo-700 text-white">
+      <div class="bg-indigo-700 py-4 text-gray-1002">
         <button onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
           {isSidebarOpen ? <ChevronLeft /> : <MenuIcon />}
         </button>
-        <span className="text-lg font-semibold">My React App</span>
+        <span className="text-lg font-semibold"> Menu</span>
       </div>
       <div className="relative cursor-pointer" onClick={handleProfileClick}>
         <AccountCircle className="text-3xl" />
