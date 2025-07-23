@@ -25,5 +25,7 @@ jobs:
 
       - name: Build project
         working-directory: Frontend/my-profile
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: npm run build
 
