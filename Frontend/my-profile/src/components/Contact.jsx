@@ -9,7 +9,7 @@ function Contact() {
       .then(response => response.json())
       .then(data => setMessage(data.message))
       .catch(error => console.error('Error:', error));
-  }, []);
+  }, [apiUrl]);
 
   return (
     <div>
