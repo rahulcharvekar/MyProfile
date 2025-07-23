@@ -12,9 +12,10 @@ function Contact() {
   }, [apiUrl]);
 
   return (
-    <div>
+    <div className="p-4">
       {message && <p>Python API says: {message}</p>}
     </div>
+    
   );
 }
 
