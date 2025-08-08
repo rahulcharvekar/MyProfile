@@ -6,6 +6,7 @@ import Dashboard from "./Dashboard";
 import Header from './Header';
 import Footer from './Footer';
 import Sidebar from './Sidebar';
+import Chat from './Chat';
 
 export default function MainPage() {
   const [currentPage, setCurrentPage] = useState("about");
@@ -19,6 +20,8 @@ export default function MainPage() {
         return <Contact />;
       case "dashboard":
         return <Dashboard />;
+      case "chat":
+        return <Chat />;  
       case "about":
       default:
         return <About />;

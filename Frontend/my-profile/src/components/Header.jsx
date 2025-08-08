@@ -19,15 +19,6 @@ export default function Header({ isCollapsed, toggleCollapse }) {
         </button>
         <span className="ml-4 text-lg font-semibold"> Welcome</span>
       </div>
-
-      {/* Right section: Search Box */}
-      <div className="flex items-center">
-        <input
-          type="text"
-          placeholder="Search..."
-          className="rounded-full px-4 py-1 text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-300 transition duration-200"
-        />
-      </div>
     </header>
   );
 }

@@ -2,7 +2,7 @@
 import React from 'react';
 
 export default function Sidebar({ currentPage, setCurrentPage, isCollapsed, setIsCollapsed }) {
-  const pages = ["about", "dashboard", "contact"];
+  const pages = ["about", "dashboard", "contact", "chat"];
 
   const handleClick = (page) => {
     setCurrentPage(page);
