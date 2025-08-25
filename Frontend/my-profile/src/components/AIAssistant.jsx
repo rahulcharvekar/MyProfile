@@ -16,9 +16,11 @@ export default function AIAssistantWidget() {
 
   const uploadRef = useRef(null);
   const chatScrollRef = useRef(null);
+  const currentFile = useRef(null);
 
-  const UPLOAD_URL = import.meta.env.VITE_API_URL;
-  const CHAT_URL = import.meta.env.VITE_CHAT_URL || "http://localhost:8000/chat";
+  const UPLOAD_URL = import.meta.env.VITE_API_URL + "/upload";
+  const INSIGHT_URL = import.meta.env.VITE_API_URL + "/get_insights/";
+  const CHAT_URL = import.meta.env.VITE_API_URL + "/chat/";
   const DELETE_URL = import.meta.env.VITE_DELETE_URL;
 
   const MAX_SIZE_BYTES = 200 * 1024 * 1024; // 200MB
@@ -28,7 +30,47 @@ export default function AIAssistantWidget() {
 
   const uploadDisabled = sessionUploads >= MAX_SESSION_UPLOADS;
 
-  // ---------- helpers: always update from latest state ----------
+  // ---------- render helpers ----------
+  function renderMessageBody(value) {
+    // Render typing placeholder
+    if (value === "__typing__") return <span>🧠 Typing...</span>;
+
+    // React element
+    if (React.isValidElement(value)) return value;
+
+    // primitives
+    if (typeof value === "string" || typeof value === "number") return String(value);
+
+    // arrays
+    if (Array.isArray(value)) {
+      return value.map((item, idx) => <div key={idx}>{renderMessageBody(item)}</div>);
+    }
+
+    // objects (e.g. {response, sources})
+    if (value && typeof value === "object") {
+      const { response, sources } = value;
+      const hasKnown = response !== undefined || sources !== undefined;
+
+      return (
+        <div className="space-y-2">
+          {response !== undefined && <div>{renderMessageBody(response)}</div>}
+          {Array.isArray(sources) && sources.length > 0 && (
+            <ul className="list-disc pl-5">
+              {sources.map((s, i) => (
+                <li key={i}>{typeof s === "string" ? s : JSON.stringify(s)}</li>
+              ))}
+            </ul>
+          )}
+          {!hasKnown && (
+            <pre className="text-xs overflow-auto">{JSON.stringify(value, null, 2)}</pre>
+          )}
+        </div>
+      );
+    }
+
+    return "";
+  }
+
   const updateGroups = (producer) => {
     setGroups((prev) => {
       const next = producer(prev);
@@ -43,7 +85,6 @@ export default function AIAssistantWidget() {
   const getLatestAttempt = (g) =>
     g?.attempts?.length ? g.attempts[g.attempts.length - 1] : null;
 
-  // patch a specific attempt on the latest state
   const patchAttempt = (list, fileName, attemptId, patch) =>
     list.map((g) => {
       if (g.name.toLowerCase() !== fileName.toLowerCase()) return g;
@@ -53,11 +94,11 @@ export default function AIAssistantWidget() {
       };
     });
 
-  const endTypingWith = (text) => {
+  const endTypingWith = (value) => {
     setMessages((prev) => {
       const copy = [...prev];
       if (copy[copy.length - 1]?.type === "typing") copy.pop();
-      return [...copy, { text, sender: "bot", type: "text" }];
+      return [...copy, { text: value, sender: "bot", type: "text" }];
     });
   };
 
@@ -89,7 +130,7 @@ export default function AIAssistantWidget() {
     localStorage.removeItem("uploadedFiles");
   }, []);
 
-  // Keep only the chat pane scrolling
+  // keep chat scrolled
   useEffect(() => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
@@ -135,6 +176,7 @@ export default function AIAssistantWidget() {
   // ---------- open chat ----------
   const openChat = async (fileName) => {
     const g = groups.find((x) => x.name.toLowerCase() === fileName.toLowerCase());
+    currentFile.current = g;
     if (!g) return;
     const latest = getLatestAttempt(g);
 
@@ -154,15 +196,22 @@ export default function AIAssistantWidget() {
       return;
     }
 
-    setMessages([...base, { sender: "bot", text: "🧠 Typing...", type: "typing" }]);
+    setMessages([...base, { sender: "bot", text: "__typing__", type: "typing" }]);
     try {
-      const res = await fetch(CHAT_URL, {
+      const res = await fetch(INSIGHT_URL + `${encodeURIComponent(fileName)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fileName }),
       });
       const data = await res.json();
-      endTypingWith(data.response ?? "✅ Ready to chat about your file.");
+
+      if (!res.ok) {
+        endTypingWith(`❌ Error starting chat for that file.`);
+        return;
+      }
+
+      // Keep full object if present (so we can show sources)
+      endTypingWith(typeof data === "object" ? data : (data?.response ?? "✅ Ready to chat about your file."));
     } catch {
       endTypingWith("❌ Error starting chat for that file.");
     }
@@ -233,7 +282,7 @@ export default function AIAssistantWidget() {
       return;
     }
 
-    // optimistic attempt (functional update)
+    // optimistic attempt
     const tempId = `temp-${Date.now()}`;
     updateGroups((prev) => {
       const idx = findGroupIdx(prev, file.name);
@@ -248,7 +297,7 @@ export default function AIAssistantWidget() {
         return [...prev, { name: file.name, attempts: [attempt], expanded: false }];
       } else {
         const g = prev[idx];
-        const nextG = { ...g, attempts: [...g.attempts, attempt], expanded: true }; // auto-expand
+        const nextG = { ...g, attempts: [...g.attempts, attempt], expanded: true };
         const next = [...prev];
         next[idx] = nextG;
         return next;
@@ -259,7 +308,7 @@ export default function AIAssistantWidget() {
       setMessages((prev) => [
         ...prev,
         { text: `📎 You uploaded: ${file.name}`, sender: "user", type: "text" },
-        { text: "🧠 Typing...", sender: "bot", type: "typing" },
+        { text: "__typing__", sender: "bot", type: "typing" },
       ]);
     }
 
@@ -268,23 +317,16 @@ export default function AIAssistantWidget() {
       formData.append("file", file);
       const res = await fetch(UPLOAD_URL, { method: "POST", body: formData });
 
+      // IMPORTANT: parse JSON *before* checking res.ok, so we can show server error messages
       let data = null;
-      try { data = await res.json(); } catch (err){console.error("Failed to parse JSON response:", err); }
-
-      const apiMsg = () =>
-        (data && (data.error || data.message || data.detail || data.response)) || `HTTP ${res.status}`;
-
-      if (res.status === 409) {
-        const msg = apiMsg();
-        updateGroups((prev) => patchAttempt(prev, file.name, tempId, { status: "error" }));
-        alert(msg);
-        if (view === "chat") endTypingWith(`❌ ${msg}`);
-        setPendingRetryFor(null);
-        return;
+      try {
+        data = await res.json();
+      } catch {
+        // ignore JSON parse errors, keep data=null
       }
 
       if (!res.ok) {
-        const msg = apiMsg();
+        const msg = (data && (data.error || data.message || data.response)) || "Upload failed.";
         updateGroups((prev) => patchAttempt(prev, file.name, tempId, { status: "error" }));
         alert(msg);
         if (view === "chat") endTypingWith(`❌ Error uploading ${file.name}: ${msg}`);
@@ -292,17 +334,8 @@ export default function AIAssistantWidget() {
         return;
       }
 
-      const fileId = data?.fileId ?? data?.file_id;
+      const fileId = data?.fileId ?? data?.file_id ?? null;
       const outSize = typeof data?.size === "number" ? data.size : file.size;
-
-      if (data?.success === false || !fileId) {
-        const msg = apiMsg() || "Upload failed";
-        updateGroups((prev) => patchAttempt(prev, file.name, tempId, { status: "error" }));
-        alert(msg);
-        if (view === "chat") endTypingWith(`❌ Error uploading ${file.name}: ${msg}`);
-        setPendingRetryFor(null);
-        return;
-      }
 
       // success
       updateGroups((prev) =>
@@ -311,8 +344,11 @@ export default function AIAssistantWidget() {
       setSessionUploads((n) => n + 1);
 
       if (view === "chat") {
-        const botText = data?.response || `✅ ${file.name} uploaded successfully.`;
-        endTypingWith(botText);
+        // keep object if provided, else show a friendly message
+        const botPayload = data && typeof data === "object"
+          ? (data.response || data.sources ? data : { response: "✅ Upload successful." })
+          : { response: `✅ ${file.name} uploaded successfully.` };
+        endTypingWith(botPayload);
       }
     } catch (err) {
       console.error(err);
@@ -326,22 +362,35 @@ export default function AIAssistantWidget() {
   // ---------- send message ----------
   const onSendMessage = async (e) => {
     e.preventDefault();
+    const file = currentFile?.current?.name || "";
     const trimmed = input.trim();
     if (!trimmed) return;
 
-    setMessages((prev) => [...prev, { text: trimmed, sender: "user", type: "text" }]);
+    setMessages((prev) => [
+      ...prev,
+      { text: trimmed, sender: "user", type: "text" },
+      { text: "__typing__", sender: "bot", type: "typing" },
+    ]);
     setInput("");
 
     try {
-      const res = await fetch(CHAT_URL, {
+      const res = await fetch(CHAT_URL + `${encodeURIComponent(file)}` + "/" + `${encodeURIComponent(trimmed)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: trimmed, fileId: currentAttemptId }),
       });
       const data = await res.json();
-      setMessages((prev) => [...prev, { text: data.response, sender: "bot", type: "text" }]);
+
+      if (!res.ok) {
+        const errorMsg = data?.error || data?.message || "Not Able to reach server. Please try again later.";
+        endTypingWith(`❌ ${errorMsg}`);
+        return;
+      }
+
+      // Keep full object if server returns {response, sources}
+      endTypingWith(typeof data === "object" ? data : (data?.response ?? String(data)));
     } catch {
-      setMessages((prev) => [...prev, { text: "❌ Error: Unable to reach server.", sender: "bot", type: "text" }]);
+      endTypingWith("❌ Error starting chat for that file.");
     }
   };
 
@@ -456,7 +505,7 @@ export default function AIAssistantWidget() {
                       </div>
 
                       <div className="flex flex-wrap gap-2">
-                        {/* Retry upload button when latest failed and attempts remain */}
+                        {/* Retry upload */}
                         {latestStatus === "error" && retriesLeft > 0 && (
                           <button
                             onClick={() => {
@@ -539,7 +588,7 @@ export default function AIAssistantWidget() {
                 <div className={`px-3 py-2 sm:px-4 sm:py-2 rounded-2xl max-w-[85%] sm:max-w-[70%] break-words ${
                   m.sender === "user" ? "bg-indigo-600 text-white" : "bg-white border"
                 }`}>
-                  {m.text}
+                  {renderMessageBody(m.text)}
                 </div>
               </div>
             ))}
