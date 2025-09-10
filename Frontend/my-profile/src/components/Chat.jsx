@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const apiURL = import.meta.env.VITE_API_URL;
+const API_BASE = import.meta.env.VITE_API_URL;
 
 
 const Chat = () => {
@@ -35,7 +35,7 @@ const Chat = () => {
     setInput('');
 
     try {
-      const res = await fetch('http://localhost:8000/chat', {
+      const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: trimmed }),
@@ -87,7 +87,7 @@ const Chat = () => {
   formData.append('file', file);
 
   try {
-    const res = await fetch(apiURL, {
+    const res = await fetch(`${API_BASE}/upload`, {
       method: 'POST',
       body: formData,
     });

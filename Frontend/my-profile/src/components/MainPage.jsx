@@ -10,15 +10,15 @@ import AIAssistant from "./AIAssistant";
 
 const MENU_ITEMS = [
   { key: "about", label: "About us" },
-  { key: "dashboard", label: "My Workspace" },
-  { key: "chat", label: "Conversations" },
+  // { key: "dashboard", label: "My Workspace" },
+  // { key: "chat", label: "Conversations" },
   { key: "ai", label: "AI Assistant 🤖" }, // label can change anytime
 ];
 
 const VIEWS = {
   about: <About />,
-  dashboard: <Dashboard />,
-  chat: <Chat />,
+  // dashboard: <Dashboard />,
+  // chat: <Chat />,
   ai: <AIAssistant />,
 };
 
