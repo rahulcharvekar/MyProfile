@@ -22,13 +22,17 @@ export default function AIAssistant() {
   const QUERY_URL = import.meta.env.VITE_AGENT_QUERY_URL || import.meta.env.VITE_API_URL;
   const DEFAULT_AGENT_ID = import.meta.env.VITE_DEFAULT_AGENT_ID;
 
-  // Derive base origin for upload and insights endpoints based on query URL
-  let BASE_ORIGIN = "";
-  try {
-    const u = new URL(String(QUERY_URL || ""), window.location.origin);
-    BASE_ORIGIN = `${u.protocol}//${u.host}`;
-  } catch (_) { /* noop */ }
-  const SIMPLE_UPLOAD_URL = BASE_ORIGIN ? `${BASE_ORIGIN}/upload/simple` : "";
+  // Prefer explicit upload URL from env, with fallback based on QUERY_URL
+  const SIMPLE_UPLOAD_URL = (() => {
+    const fromEnv = import.meta.env.VITE_UPLOAD_URL;
+    if (fromEnv) return fromEnv;
+    try {
+      const u = new URL(String(QUERY_URL || ""), window.location.origin);
+      return `${u.protocol}//${u.host}/upload/simple`;
+    } catch (_) {
+      return "";
+    }
+  })();
 
   // Persist a session id so backend can keep chat history across turns
   const sessionIdRef = useRef(null);
