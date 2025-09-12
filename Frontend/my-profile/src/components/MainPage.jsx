@@ -1,38 +1,22 @@
 // MainPage.jsx
-import React, { useState } from "react";
-import About from "./About";
-import Dashboard from "./Dashboard";
+import React from "react";
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Header from "./Header";
 import Footer from "./Footer";
-import Sidebar from "./Sidebar";
-import Chat from "./Chat";
 import AIAssistant from "./AIAssistant";
+import Welcome from "./Welcome";
 
-const MENU_ITEMS = [
-  { key: "about", label: "About us" },
-  // { key: "dashboard", label: "My Workspace" },
-  // { key: "chat", label: "Conversations" },
-  { key: "ai", label: "AI Assistant 🤖" }, // label can change anytime
-];
+// No header menu — use deep links or Welcome actions
 
-const VIEWS = {
-  about: <About />,
-  // dashboard: <Dashboard />,
-  // chat: <Chat />,
-  ai: <AIAssistant />,
-};
+// Note: Views are now routed with react-router-dom
 
 export default function MainPage() {
-  const [currentKey, setCurrentKey] = useState("about");
-  const [isCollapsed, setIsCollapsed] = useState(true);
-
-  const toggleCollapse = () => setIsCollapsed((prev) => !prev);
 
   return (
     <div className="relative h-screen overflow-hidden">
-      {/* Header */}
+      {/* Header with top navigation */}
       <div className="fixed top-0 left-0 right-0 z-40 bg-blue-800">
-        <Header isCollapsed={isCollapsed} toggleCollapse={toggleCollapse} />
+        <Header />
       </div>
 
       {/* Footer */}
@@ -40,30 +24,20 @@ export default function MainPage() {
         <Footer />
       </div>
 
-      {/* Main Content Area: Sidebar + Page content */}
+      {/* Main Content Area */}
       <div className="pt-16 pb-16 h-full flex relative">
-        <div className="flex-1 flex relative w-full">
-          {/* Sidebar */}
-          <Sidebar
-            items={MENU_ITEMS}
-            currentKey={currentKey}
-            setCurrentKey={setCurrentKey}
-            isCollapsed={isCollapsed}
-            setIsCollapsed={setIsCollapsed}
-          />
-
-          {/* Main content area with click-to-collapse */}
-          <main
-            className={`flex-1 overflow-auto bg-white p-4 transition-all duration-300 ease-in-out ${
-              isCollapsed ? "pl-0" : "pl-48"
-            }`}
-            onClick={() => {
-              if (!isCollapsed) setIsCollapsed(true);
-            }}
-          >
-            {VIEWS[currentKey]}
-          </main>
-        </div>
+        <main className="flex-1 overflow-auto bg-white p-4">
+          <Routes>
+            <Route path="/" element={<Navigate to="/welcome" replace />} />
+            <Route path="/welcome" element={<Welcome />} />
+            <Route path="/ai" element={<AIAssistant />} />
+            <Route path="/ai/:agentId" element={<AIAssistant />} />
+            <Route path="/agent/:agentId" element={<AIAssistant />} />
+            <Route path="/a/:agentId" element={<AIAssistant />} />
+            {/* Additional routes can be added here if needed */}
+            <Route path="*" element={<Navigate to="/welcome" replace />} />
+          </Routes>
+        </main>
       </div>
     </div>
   );

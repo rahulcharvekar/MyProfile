@@ -1,26 +1,49 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 
 // Clean ChatGPT-like UI only (no API integration yet)
 // - Scrollable conversation
-// - + button to attach one file (pdf/txt/csv)
+// - + button to attach one file (pdf/csv)
 // - Sending shows user's text and optional file bubble
 
 export default function AIAssistant() {
-  const [messages, setMessages] = useState([
-    { id: "welcome", sender: "bot", type: "text", text: "👋 Hi! Ask a question to get started." },
-  ]);
+  const navigate = useNavigate();
+  const { agentId: agentFromPathParam } = useParams();
+  const [searchParams] = useSearchParams();
+  const agentFromUrl = searchParams.get('agent') || '';
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [attachedFile, setAttachedFile] = useState(null); // File | null (kept and sent with each message until cleared)
   const [activeFile, setActiveFile] = useState(null);     // { name: string }
+  // Selected agent is provided via URL param (from Welcome page).
+  // We keep a small mapping for friendly labels and hints.
 
   const chatScrollRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const ACCEPTED_EXT = /(\.pdf|\.txt|\.csv)$/i;
+  const ACCEPTED_EXT = /(\.pdf|\.csv)$/i;
   const MAX_SIZE_BYTES = 200 * 1024 * 1024; // 200MB
   // Single endpoint to handle chat (agent orchestrates tools server-side)
   const QUERY_URL = import.meta.env.VITE_AGENT_QUERY_URL || import.meta.env.VITE_API_URL;
   const DEFAULT_AGENT_ID = import.meta.env.VITE_DEFAULT_AGENT_ID;
+  const selectedAgentId = agentFromPathParam || agentFromUrl || (DEFAULT_AGENT_ID || "");
+  const agentLabel = useMemo(() => {
+    if (!selectedAgentId) return '';
+    return String(selectedAgentId)
+      .replace(/[_-]+/g, ' ')
+      .replace(/\b\w/g, (m) => m.toUpperCase());
+  }, [selectedAgentId]);
+  const agentHint = useMemo(() => {
+    const id = String(selectedAgentId || '').toLowerCase();
+    if (id === 'default') return 'General assistant over uploaded documents.';
+    if (id === 'chat_only' || id === 'chat-only') return 'Answers questions over a specified file.';
+    return 'You are now chatting with the selected agent.';
+  }, [selectedAgentId]);
+
+  // If no agent provided, redirect to welcome
+  useEffect(() => {
+    if (!selectedAgentId) navigate('/welcome', { replace: true });
+  }, [selectedAgentId, navigate]);
 
   // Prefer explicit upload URL from env, with fallback based on QUERY_URL
   const SIMPLE_UPLOAD_URL = (() => {
@@ -58,6 +81,19 @@ export default function AIAssistant() {
     }
   }, [messages]);
 
+  // Seed a contextual welcome message when the agent changes
+  useEffect(() => {
+    if (!selectedAgentId) return;
+    setMessages((prev) => {
+      // only add if first message or agent changed context
+      if (prev.length === 0 || prev[0]?.meta !== selectedAgentId) {
+        const welcome = `👋 You are now chatting with ${agentLabel || 'the selected'} agent. ${agentHint}`.trim();
+        return [{ id: `welcome-${Date.now()}`, meta: selectedAgentId, sender: 'bot', type: 'text', text: welcome }];
+      }
+      return prev;
+    });
+  }, [selectedAgentId, agentLabel, agentHint]);
+
   const onAttachClick = () => {
     fileInputRef.current?.click();
   };
@@ -71,7 +107,7 @@ export default function AIAssistant() {
       return;
     }
     if (!ACCEPTED_EXT.test(file.name)) {
-      alert("Only PDF, TXT, or CSV files are allowed.");
+      alert("Only PDF orr CSV files are allowed.");
       return;
     }
 
@@ -158,7 +194,7 @@ export default function AIAssistant() {
         : trimmed;
       const payload = {
         input: inputText,
-        ...(DEFAULT_AGENT_ID ? { agent: DEFAULT_AGENT_ID } : {}),
+        agent: selectedAgentId,
         session_id: sessionIdRef.current,
       };
       const res = await fetch(QUERY_URL, {
@@ -235,30 +271,55 @@ export default function AIAssistant() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 overflow-hidden">
-      <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 pb-10 flex flex-col h-[70vh] sm:h-[80vh]">
-        {/* Header */}
-        <div className="py-3 flex items-center justify-between">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-10">
+      {/* Back link above the header */}
+      <div className="pt-3 pb-1">
+        <a
+          href="#/welcome"
+          onClick={(e) => { e.preventDefault(); navigate('/welcome'); }}
+          className="inline-flex items-center gap-1 text-sm text-blue-700 hover:underline"
+          aria-label="Back to Welcome"
+          title="Back"
+        >
+          <span aria-hidden>←</span>
+          <span>Back</span>
+        </a>
+      </div>
+      {/* Header */}
+      <div className="py-2 flex items-center justify-between">
           <h2 className="text-xl sm:text-2xl font-semibold text-slate-900">AI Assistant</h2>
-          <div className="text-xs sm:text-sm text-slate-600">
-            {activeFile ? (
-              <span title={activeFile.name} className="inline-flex items-center gap-2">
-                Using file: <span className="font-medium">{activeFile.name}</span>
-                <button type="button" onClick={clearActiveFile} className="ml-1 text-slate-400 hover:text-slate-700" aria-label="Clear active file">✕</button>
-              </span>
-            ) : (
-              <span className="text-slate-400">No file selected</span>
-            )}
+          <div className="flex items-center gap-3">
+            {/* Active agent indicator */}
+            <div className="text-xs sm:text-sm text-slate-700">
+              <span className="mr-1 text-slate-500">Agent:</span>
+              <span className="font-medium">{agentLabel || 'N/A'}</span>
+            </div>
+            {/* Active file indicator */}
+            <div className="text-xs sm:text-sm text-slate-600">
+              {activeFile ? (
+                <span title={activeFile.name} className="inline-flex items-center gap-2">
+                  Using file: <span className="font-medium">{activeFile.name}</span>
+                  <button type="button" onClick={clearActiveFile} className="ml-1 text-slate-400 hover:text-slate-700" aria-label="Clear active file">✕</button>
+                </span>
+              ) : (
+                <span className="text-slate-400">No file selected</span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Messages */}
-        <div ref={chatScrollRef} className="flex-1 overflow-y-auto border rounded-2xl p-3 sm:p-4 bg-slate-50">
-          {messages.map(renderMessage)}
-        </div>
+      {/* Agent-specific hint */}
+      {agentHint && (
+        <div className="mb-2 text-xs sm:text-sm text-slate-600">{agentHint}</div>
+      )}
 
-        {/* Composer */}
-        <form onSubmit={onSend} className="mt-3 sm:mt-4 flex items-center gap-2">
+      {/* Messages */}
+      <div ref={chatScrollRef} className="min-h-[40vh] max-h-[65vh] overflow-y-auto border rounded-2xl p-3 sm:p-4 bg-slate-50">
+        {messages.map(renderMessage)}
+      </div>
+
+      {/* Composer */}
+      <form onSubmit={onSend} className="mt-3 sm:mt-4 flex items-center gap-2">
           <button
             type="button"
             onClick={onAttachClick}
@@ -296,8 +357,7 @@ export default function AIAssistant() {
           >
             Send
           </button>
-        </form>
-      </div>
+      </form>
     </div>
   );
 }
