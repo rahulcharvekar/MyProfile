@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
+import { endpoints } from '../lib/apiConfig';
+import { listAgents, queryAgent, uploadFile } from '../lib/apiClient';
 
 // Clean ChatGPT-like UI only (no API integration yet)
 // - Scrollable conversation
@@ -23,8 +25,6 @@ export default function AIAssistant() {
 
   const ACCEPTED_EXT = /(\.pdf|\.csv)$/i;
   const MAX_SIZE_BYTES = 200 * 1024 * 1024; // 200MB
-  // Single endpoint to handle chat (agent orchestrates tools server-side)
-  const QUERY_URL = import.meta.env.VITE_AGENT_QUERY_URL || import.meta.env.VITE_API_URL;
   const DEFAULT_AGENT_ID = import.meta.env.VITE_DEFAULT_AGENT_ID;
   const selectedAgentId = agentFromPathParam || agentFromUrl || (DEFAULT_AGENT_ID || "");
   const agentLabel = useMemo(() => {
@@ -40,22 +40,40 @@ export default function AIAssistant() {
     return 'You are now chatting with the selected agent.';
   }, [selectedAgentId]);
 
+  const [isUploadEnabled, setIsUploadEnabled] = useState(true);
+  const isUploadDisabled = !isUploadEnabled;
+
   // If no agent provided, redirect to welcome
   useEffect(() => {
     if (!selectedAgentId) navigate('/welcome', { replace: true });
   }, [selectedAgentId, navigate]);
 
-  // Prefer explicit upload URL from env, with fallback based on QUERY_URL
-  const SIMPLE_UPLOAD_URL = (() => {
-    const fromEnv = import.meta.env.VITE_UPLOAD_URL;
-    if (fromEnv) return fromEnv;
-    try {
-      const u = new URL(String(QUERY_URL || ""), window.location.origin);
-      return `${u.protocol}//${u.host}/upload/simple`;
-    } catch (_) {
-      return "";
+  // Fetch agent metadata to decide upload capability
+  useEffect(() => {
+    let isActive = true;
+    const fetchMeta = async () => {
+      if (!selectedAgentId || !endpoints.agentList) return;
+      try {
+        const { byId } = await listAgents();
+        const entry = byId[selectedAgentId];
+        if (entry && typeof entry.uploadEnabled === 'boolean') {
+          if (isActive) setIsUploadEnabled(entry.uploadEnabled);
+        }
+      } catch (_) {
+        // ignore errors; keep default
+      }
+    };
+    fetchMeta();
+    return () => { isActive = false; };
+  }, [selectedAgentId]);
+
+  // Clear any file state when uploads are disabled
+  useEffect(() => {
+    if (!isUploadEnabled) {
+      setActiveFile(null);
+      setAttachedFile(null);
     }
-  })();
+  }, [isUploadEnabled]);
 
   // Persist a session id so backend can keep chat history across turns
   const sessionIdRef = useRef(null);
@@ -94,11 +112,21 @@ export default function AIAssistant() {
     });
   }, [selectedAgentId, agentLabel, agentHint]);
 
+  // Clear attachments if uploads are disabled for the selected agent
+  useEffect(() => {
+    if (!isUploadEnabled) {
+      setAttachedFile(null);
+      setActiveFile(null);
+    }
+  }, [isUploadEnabled]);
+
   const onAttachClick = () => {
+    if (isUploadDisabled) return;
     fileInputRef.current?.click();
   };
 
   const onFileChange = async (e) => {
+    if (isUploadDisabled) return;
     const file = e.target.files?.[0] || null;
     e.target.value = ""; // allow reselection of the same file
     if (!file) return;
@@ -119,38 +147,34 @@ export default function AIAssistant() {
     ]);
     setAttachedFile(file);
 
-    if (!SIMPLE_UPLOAD_URL) return;
+    if (!endpoints.uploadSimple) return;
 
     try {
-      const formData = new FormData();
-      formData.append('file', file, file.name);
-      const res = await fetch(SIMPLE_UPLOAD_URL, { method: 'POST', body: formData });
-      let data = null;
-      try { data = await res.json(); } catch (_) { /* noop */ }
-      if (!res.ok) {
+      try {
+        const data = await uploadFile(file);
+        // Mark uploaded and set active file name, then print response
+        setMessages((prev) => prev.map((m) =>
+          (m.id === uploadMsgId && m.type === 'file') ? { ...m, file: { ...m.file, status: 'ready' } } : m
+        ));
+        setActiveFile({ name: file.name });
+        setAttachedFile(null);
+
+        const status = data?.status || 'uploaded';
+        const message = data?.message || 'File uploaded.';
+        const fileHash = data?.file_hash ? ` (hash: ${String(data.file_hash).slice(0, 12)}…)` : '';
+        setMessages((prev) => [
+          ...prev,
+          { id: `bot-${Date.now()}`, sender: 'bot', type: 'text', text: `✅ ${file.name} ${status}.${fileHash}\n${message}` },
+        ]);
+      } catch (errUp) {
         setMessages((prev) => prev.map((m) =>
           (m.id === uploadMsgId && m.type === 'file') ? { ...m, file: { ...m.file, status: 'error' } } : m
         ));
-        const errText = (data?.error || data?.message || 'Upload failed.');
+        const errText = (errUp?.data?.error || errUp?.data?.message || errUp?.message || 'Upload failed.');
         setMessages((prev) => [...prev, { id: `bot-${Date.now()}`, sender: 'bot', type: 'text', text: `❌ ${String(errText)}` }]);
         setAttachedFile(null);
         return;
       }
-
-      // Mark uploaded and set active file name, then print response
-      setMessages((prev) => prev.map((m) =>
-        (m.id === uploadMsgId && m.type === 'file') ? { ...m, file: { ...m.file, status: 'ready' } } : m
-      ));
-      setActiveFile({ name: file.name });
-      setAttachedFile(null);
-
-      const status = data?.status || 'uploaded';
-      const message = data?.message || 'File uploaded.';
-      const fileHash = data?.file_hash ? ` (hash: ${String(data.file_hash).slice(0, 12)}…)` : '';
-      setMessages((prev) => [
-        ...prev,
-        { id: `bot-${Date.now()}`, sender: 'bot', type: 'text', text: `✅ ${file.name} ${status}.${fileHash}\n${message}` },
-      ]);
     } catch (err) {
       console.error(err);
       setMessages((prev) => prev.map((m) =>
@@ -184,45 +208,27 @@ export default function AIAssistant() {
     setInput("");
     
     // If endpoint configured, send the message as JSON
-    if (!QUERY_URL) return;
+    if (!endpoints.agentQuery) return;
     // show typing
     setMessages((prev) => [...prev, { id: `typing-${Date.now()}`, sender: 'bot', type: 'typing', text: '__typing__' }]);
 
     try {
-      const inputText = activeFile?.name
+      const inputText = (!isUploadDisabled && activeFile?.name)
         ? `Answer using file '${activeFile.name}': ${trimmed}`
         : trimmed;
-      const payload = {
-        input: inputText,
-        agent: selectedAgentId,
-        session_id: sessionIdRef.current,
-      };
-      const res = await fetch(QUERY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      let data = null;
-      try { data = await res.json(); } catch (err) { void err; }
-      if (!res.ok) {
-        // Try to read text if JSON not available
-        let textFallback = '';
-        try { textFallback = await res.text(); } catch (_) { /* noop */ }
-        const errText = (data?.error || data?.message || textFallback || 'Not Able to reach server. Please try again later.');
-        endTypingWith(`❌ ${String(errText)}`);
-        return;
-      }
+      const data = await queryAgent({ input: inputText, agent: selectedAgentId, sessionId: sessionIdRef.current });
       const botText =
         (typeof data?.response === 'string' && data.response) ||
         (typeof data === 'string' && data) ||
         data?.message ||
         '✅ Done.';
-      endTypingWith(botText);
-    } catch (err) {
-      console.error(err);
-      endTypingWith('❌ Error sending message.');
-    }
-  };
+    endTypingWith(botText);
+  } catch (err) {
+    console.error(err);
+    const msg = String(err?.message || 'Error sending message.');
+    endTypingWith(`❌ ${msg}`);
+  }
+};
 
   const renderMessage = (m, i) => {
     const bubbleBase = "px-3 py-2 sm:px-4 sm:py-2 rounded-2xl max-w-[85%] sm:max-w-[70%] break-words";
@@ -295,16 +301,21 @@ export default function AIAssistant() {
               <span className="font-medium">{agentLabel || 'N/A'}</span>
             </div>
             {/* Active file indicator */}
-            <div className="text-xs sm:text-sm text-slate-600">
-              {activeFile ? (
-                <span title={activeFile.name} className="inline-flex items-center gap-2">
-                  Using file: <span className="font-medium">{activeFile.name}</span>
-                  <button type="button" onClick={clearActiveFile} className="ml-1 text-slate-400 hover:text-slate-700" aria-label="Clear active file">✕</button>
-                </span>
-              ) : (
-                <span className="text-slate-400">No file selected</span>
-              )}
-            </div>
+            {!isUploadDisabled && (
+              <div className="text-xs sm:text-sm text-slate-600">
+                {activeFile ? (
+                  <span title={activeFile.name} className="inline-flex items-center gap-2">
+                    Using file: <span className="font-medium">{activeFile.name}</span>
+                    <button type="button" onClick={clearActiveFile} className="ml-1 text-slate-400 hover:text-slate-700" aria-label="Clear active file">✕</button>
+                  </span>
+                ) : (
+                  <span className="text-slate-400">No file selected</span>
+                )}
+              </div>
+            )}
+            {isUploadDisabled && (
+              <div className="text-xs sm:text-sm text-slate-400">Uploads disabled</div>
+            )}
           </div>
         </div>
 
@@ -320,28 +331,32 @@ export default function AIAssistant() {
 
       {/* Composer */}
       <form onSubmit={onSend} className="mt-3 sm:mt-4 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onAttachClick}
-            className="rounded-lg border px-3 py-2 text-sm bg-white hover:bg-slate-50"
-            title="Upload file"
-            aria-label="Upload file"
-          >
-            +
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf,.txt,.csv"
-            className="hidden"
-            onChange={onFileChange}
-          />
+          {!isUploadDisabled && (
+            <>
+              <button
+                type="button"
+                onClick={onAttachClick}
+                className="rounded-lg border px-3 py-2 text-sm bg-white hover:bg-slate-50"
+                title="Upload file"
+                aria-label="Upload file"
+              >
+                +
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.txt,.csv"
+                className="hidden"
+                onChange={onFileChange}
+              />
 
-          {attachedFile && (
-            <span className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs text-slate-700">
-              <span className="truncate max-w-[10rem]" title={attachedFile.name}>{attachedFile.name}</span>
-              <button type="button" onClick={onRemoveAttachment} aria-label="Remove attachment" className="text-slate-400 hover:text-slate-700">✕</button>
-            </span>
+              {attachedFile && (
+                <span className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs text-slate-700">
+                  <span className="truncate max-w-[10rem]" title={attachedFile.name}>{attachedFile.name}</span>
+                  <button type="button" onClick={onRemoveAttachment} aria-label="Remove attachment" className="text-slate-400 hover:text-slate-700">✕</button>
+                </span>
+              )}
+            </>
           )}
           <input
             value={input}
