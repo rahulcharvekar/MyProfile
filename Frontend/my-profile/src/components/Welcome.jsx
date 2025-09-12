@@ -33,21 +33,26 @@ export default function Welcome() {
   };
 
   return (
-    <div className="flex h-screen antialiased text-gray-800">
-      <div className="flex-1 w-full p-2 sm:p-6 justify-between flex flex-col min-h-full">
+    <div className="text-gray-800">
+      <div className="max-w-6xl mx-auto px-2 sm:px-6 py-1 sm:py-2">
         {/* Header (match AI Assistant style) */}
-        <div className="flex sm:items-center justify-between py-3 border-b-2 border-gray-200">
-          <div className="relative flex items-center space-x-4">
-            <div className="flex flex-col leading-tight">
-              <div className="text-xl sm:text-2xl mt-1 flex items-center">
-                <span className="text-gray-700 mr-3">Welcome</span>
+        <div className="border-b-2 border-gray-200">
+          <div className="flex sm:items-center justify-between py-1">
+            <div className="relative flex items-center space-x-4">
+              <div className="flex flex-col leading-tight">
+                <div className="text-xl sm:text-2xl mt-1 flex items-center">
+                  <span className="text-gray-700 mr-3">Welcome</span>
+                </div>
               </div>
             </div>
           </div>
+          <p className="text-sm text-gray-600 mb-1">
+            Choose an AI agent below to start a conversation. You can switch agents anytime; sessions are kept per agent.
+          </p>
         </div>
 
         {/* Content card (match AI Assistant) */}
-      
+        <div className="mt-2 rounded-2xl bg-gray-100 p-3 sm:p-4">
           {/* Agents listed via centralized API config */}
           {loading && (
             <div className="mb-4 flex items-center gap-2 text-slate-600">
@@ -96,6 +101,7 @@ export default function Welcome() {
               </div>
             </div>
           )}
+        </div>
       </div>
     </div>
   );

@@ -277,163 +277,75 @@ export default function AIAssistant() {
   };
 
   return (
-    <div className="flex h-screen antialiased text-gray-800">
-      {/* Left sidebar (reference to sample.jsx) */}
-      <div className="flex flex-col py-4 px-4 w-64 bg-white border-r flex-shrink-0">
-        <div className="flex items-center h-12 w-full">
-          <div className="flex items-center justify-center rounded-2xl text-indigo-700 bg-indigo-100 h-9 w-9">💬</div>
-          <div className="ml-2 font-bold text-xl">AI Assistant</div>
-        </div>
-        <div className="mt-3">
-          <a
-            href="#/welcome"
-            onClick={(e) => { e.preventDefault(); navigate('/welcome'); }}
-            className="inline-flex items-center gap-1 text-sm text-blue-700 hover:underline"
-            aria-label="Back to Welcome"
-            title="Back"
-          >
-            <span aria-hidden>←</span>
-            <span>Back</span>
-          </a>
-        </div>
-        {/* Agent and context info */}
-        <div className="mt-4 space-y-2 text-xs text-gray-700">
-          <div>
-            <span className="text-gray-500">Agent:</span>{' '}
-            <span className="font-medium">{agentLabel || 'N/A'}</span>
-          </div>
-          {agentHint && (
-            <div className="text-gray-600">{agentHint}</div>
-          )}
-          {!isUploadDisabled ? (
-            <div className="text-gray-600">
-              {activeFile ? (
-                <span title={activeFile.name} className="inline-flex items-center gap-2">
-                  Using file: <span className="font-medium truncate max-w-[8rem]">{activeFile.name}</span>
-                  <button type="button" onClick={clearActiveFile} className="ml-1 text-gray-400 hover:text-gray-700" aria-label="Clear active file">✕</button>
-                </span>
-              ) : (
-                <span className="text-gray-400">No file selected</span>
+    <div className="text-gray-800">
+      <div className="max-w-6xl mx-auto px-2 sm:px-6 py-1 sm:py-2">
+        {/* Header (match Welcome layout) */}
+        <div className="border-b-2 border-gray-200">
+          <div className="flex sm:items-center justify-between py-1">
+            <div className="relative flex items-center space-x-4">
+              <div className="flex flex-col leading-tight">
+                <div className="text-xl sm:text-2xl mt-1 flex items-center">
+                  <span className="text-gray-700 mr-3">{agentLabel || 'AI Assistant'}</span>
+                </div>
+                {agentHint && <span className="text-sm text-gray-600">{agentHint}</span>}
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button type="button" onClick={() => navigate('/welcome')} className="inline-flex items-center justify-center rounded-lg border h-9 w-9 text-gray-500 hover:bg-gray-100" title="Back" aria-label="Back">
+                ←
+              </button>
+              {!isUploadDisabled && activeFile && (
+                <button type="button" onClick={clearActiveFile} className="hidden sm:inline-flex items-center justify-center rounded-lg border h-9 px-2 text-gray-600 hover:bg-gray-100" title="Clear file">
+                  <span className="truncate max-w-[8rem]">{activeFile.name}</span>
+                  <span className="ml-2">✕</span>
+                </button>
               )}
             </div>
-          ) : (
-            <div className="text-gray-400">Uploads disabled</div>
-          )}
+          </div>
         </div>
-      </div>
 
-      {/* Right main area (chat) */}
-      <div className="flex flex-col flex-auto h-full p-4 sm:p-6 w-0 min-w-0">
-        <div className="flex flex-col flex-auto flex-shrink-0 rounded-2xl bg-gray-100 h-full p-3 sm:p-4">
-          {/* Messages list */}
-          <div className="flex flex-col h-full overflow-y-auto overscroll-contain mb-3" ref={chatScrollRef}>
-            <div className="grid grid-cols-12 gap-y-2">
-              {messages.map((m, i) => {
-                const isUser = m.sender === 'user';
-                const col = isUser ? 'col-start-6 col-end-13' : 'col-start-1 col-end-8';
-                const align = isUser ? 'flex items-center justify-start flex-row-reverse' : 'flex flex-row items-center';
-                const bubble = isUser
-                  ? 'relative mr-3 text-sm bg-indigo-100 py-2 px-4 shadow rounded-xl'
-                  : 'relative ml-3 text-sm bg-white py-2 px-4 shadow rounded-xl';
-
-                if (m.type === 'file') {
-                  const status = m.file?.status;
-                  const statusText = status === 'uploading' ? 'Uploading…' : status === 'ready' ? 'Uploaded' : status === 'error' ? 'Failed' : '';
-                  return (
-                    <div key={m.id || i} className={`${col} p-2 rounded-lg`}>
-                      <div className={align}>
-                        <div className="flex items-center justify-center h-9 w-9 rounded-full bg-indigo-500 text-white flex-shrink-0">F</div>
-                        <div className={bubble}>
-                          <div className="text-sm font-medium" title={m.file?.name}>{m.file?.name}</div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            {typeof m.file?.size === 'number' && <span>{(m.file.size / 1024).toFixed(1)} KB • </span>}
-                            <span>{statusText}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                if (m.type === 'typing') {
-                  return (
-                    <div key={m.id || i} className={`${col} p-2 rounded-lg`}>
-                      <div className={align}>
-                        <div className="flex items-center justify-center h-9 w-9 rounded-full bg-indigo-500 text-white flex-shrink-0">🧠</div>
-                        <div className={bubble}>Typing...</div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div key={m.id || i} className={`${col} p-2 rounded-lg`}>
-                    <div className={align}>
-                      <div className="flex items-center justify-center h-9 w-9 rounded-full bg-indigo-500 text-white flex-shrink-0">{isUser ? 'U' : 'A'}</div>
-                      <div className={bubble}>{String(m.text ?? '')}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        {/* Content card */}
+        <div className="mt-2 rounded-2xl bg-gray-100 p-3 sm:p-4">
+          {/* Messages */}
+          <div ref={chatScrollRef} id="messages" className="min-h-[40vh] max-h-[60vh] overflow-y-auto space-y-3 p-1">
+            {messages.map(renderMessage)}
           </div>
 
           {/* Composer */}
-          <form onSubmit={onSend} className="flex flex-row items-center h-16 rounded-xl bg-white w-full px-3 sm:px-4">
-            {!isUploadDisabled && (
-              <div>
-                <button
-                  type="button"
-                  onClick={onAttachClick}
-                  className="flex items-center justify-center text-gray-400 hover:text-gray-600"
-                  title="Upload file"
-                  aria-label="Upload file"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+          <div className="border-t-2 border-gray-200 pt-3 mt-2">
+            <form onSubmit={onSend} className="relative flex">
+              <span className="absolute inset-y-0 flex items-center">
+                {!isUploadDisabled && (
+                  <button type="button" onClick={onAttachClick} className="inline-flex items-center justify-center rounded-full h-10 w-10 text-gray-500 hover:bg-gray-300" title="Attach file" aria-label="Attach file">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6 text-gray-600">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                  </button>
+                )}
+              </span>
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Write your message!"
+                className="w-full focus:outline-none focus:placeholder-gray-400 text-gray-700 placeholder-gray-600 pl-12 bg-white rounded-md py-3"
+                aria-label="Message input"
+              />
+              <div className="absolute right-0 items-center inset-y-0 hidden sm:flex">
+                <button type="submit" className="inline-flex items-center justify-center rounded-lg px-4 py-3 text-white bg-blue-500 hover:bg-blue-400">
+                  <span className="font-bold">Send</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-6 w-6 ml-2 transform rotate-90">
+                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
                   </svg>
                 </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.txt,.csv"
-                  className="hidden"
-                  onChange={onFileChange}
-                />
               </div>
-            )}
-            <div className="flex-grow ml-3">
-              <div className="relative w-full">
-                <input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  className="flex w-full border rounded-xl focus:outline-none focus:border-indigo-300 pl-4 h-10 text-sm"
-                  placeholder="Type your message..."
-                  aria-label="Message input"
-                />
-              </div>
-            </div>
-            <div className="ml-3">
-              <button
-                type="submit"
-                className="flex items-center justify-center bg-indigo-500 hover:bg-indigo-600 rounded-xl text-white px-4 py-2 flex-shrink-0"
-                aria-label="Send message"
-              >
-                <span>Send</span>
-                <span className="ml-2">
-                  <svg className="w-4 h-4 transform rotate-45 -mt-px" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                </span>
-              </button>
-            </div>
+              {!isUploadDisabled && (
+                <input ref={fileInputRef} type="file" accept=".pdf,.txt,.csv" className="hidden" onChange={onFileChange} />
+              )}
+            </form>
             {!isUploadDisabled && attachedFile && (
-              <span className="ml-3 inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs text-slate-700">
-                <span className="truncate max-w-[10rem]" title={attachedFile.name}>{attachedFile.name}</span>
-                <button type="button" onClick={onRemoveAttachment} aria-label="Remove attachment" className="text-slate-400 hover:text-slate-700">✕</button>
-              </span>
+              <div className="mt-2 text-xs text-gray-600">Attached: <span className="font-medium">{attachedFile.name}</span> <button type="button" onClick={onRemoveAttachment} className="ml-2 text-gray-400 hover:text-gray-700">✕</button></div>
             )}
-          </form>
+          </div>
         </div>
       </div>
     </div>

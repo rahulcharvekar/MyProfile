@@ -25,7 +25,7 @@ export default function MainPage() {
       </div>
 
       {/* Main Content Area */}
-      <div className="pt-16 pb-16 h-full flex relative">
+      <div className="pt-12 pb-16 h-full flex relative">
         <main className="flex-1 overflow-auto bg-white p-4">
           <Routes>
             <Route path="/" element={<Navigate to="/welcome" replace />} />
