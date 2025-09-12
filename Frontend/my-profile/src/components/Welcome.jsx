@@ -33,59 +33,70 @@ export default function Welcome() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">Welcome 👋</h1>
-      <p className="text-gray-700 mb-4">Pick an agent to start chatting.</p>
-
-      {/* Agents listed via centralized API config; configure VITE_API_BASE or endpoint envs */}
-
-      {loading && (
-        <div className="mb-4 flex items-center gap-2 text-slate-600">
-          <span className="inline-block h-4 w-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-          Loading agents…
-        </div>
-      )}
-      {error && (
-        <div className="mb-4 rounded border border-rose-300 bg-rose-50 text-rose-800 p-3">{error}</div>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {agents.map((a) => (
-          <div key={a.id} className="border rounded-lg p-4 bg-white">
-            <div className="font-medium text-slate-900 flex items-center justify-between">
-              <span>{a.label}</span>
-              <span className={`text-xs px-2 py-0.5 rounded ${a.uploadEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
-                {a.uploadEnabled ? 'Uploads On' : 'No Uploads'}
-              </span>
+    <div className="flex h-screen antialiased text-gray-800">
+      <div className="flex-1 w-full p-2 sm:p-6 justify-between flex flex-col min-h-full">
+        {/* Header (match AI Assistant style) */}
+        <div className="flex sm:items-center justify-between py-3 border-b-2 border-gray-200">
+          <div className="relative flex items-center space-x-4">
+            <div className="flex flex-col leading-tight">
+              <div className="text-xl sm:text-2xl mt-1 flex items-center">
+                <span className="text-gray-700 mr-3">Welcome</span>
+              </div>
             </div>
-            {a.description && (
-              <div className="text-sm text-slate-600 mt-1 line-clamp-3">{a.description}</div>
-            )}
-            <button
-              type="button"
-              className="mt-3 inline-flex items-center rounded bg-indigo-600 text-white px-3 py-1.5 text-sm hover:bg-indigo-500"
-              onClick={() => onSelectAgent(a.id)}
-            >
-              Chat with {a.label}
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {!loading && !error && agents.length === 0 && (
-        <div className="rounded-lg border bg-slate-50 p-4 text-slate-700">
-          No agents available. Try again later or go directly to the AI Assistant.
-          <div className="mt-2">
-            <button
-              type="button"
-              className="inline-flex items-center rounded border px-3 py-1.5 text-sm hover:bg-slate-100"
-              onClick={() => navigate('/ai')}
-            >
-              Open AI Assistant
-            </button>
           </div>
         </div>
-      )}
+
+        {/* Content card (match AI Assistant) */}
+      
+          {/* Agents listed via centralized API config */}
+          {loading && (
+            <div className="mb-4 flex items-center gap-2 text-slate-600">
+              <span className="inline-block h-4 w-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+              Loading agents…
+            </div>
+          )}
+          {error && (
+            <div className="mb-4 rounded border border-rose-300 bg-rose-50 text-rose-800 p-3">{error}</div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {agents.map((a) => (
+              <div key={a.id} className="border rounded-lg p-4 bg-white shadow-sm">
+                <div className="font-medium text-slate-900 flex items-center justify-between">
+                  <span>{a.label}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded ${a.uploadEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                    {a.uploadEnabled ? 'Uploads On' : 'No Uploads'}
+                  </span>
+                </div>
+                {a.description && (
+                  <div className="text-sm text-slate-600 mt-1 line-clamp-3">{a.description}</div>
+                )}
+                <button
+                  type="button"
+                  className="mt-3 inline-flex items-center rounded bg-indigo-600 text-white px-3 py-1.5 text-sm hover:bg-indigo-500"
+                  onClick={() => onSelectAgent(a.id)}
+                >
+                  Chat with {a.label}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {!loading && !error && agents.length === 0 && (
+            <div className="rounded-lg border bg-slate-50 p-4 text-slate-700">
+              No agents available. Try again later or go directly to the AI Assistant.
+              <div className="mt-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center rounded border px-3 py-1.5 text-sm hover:bg-slate-100"
+                  onClick={() => navigate('/ai')}
+                >
+                  Open AI Assistant
+                </button>
+              </div>
+            </div>
+          )}
+      </div>
     </div>
   );
 }

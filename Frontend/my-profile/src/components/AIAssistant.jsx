@@ -277,102 +277,165 @@ export default function AIAssistant() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-10">
-      {/* Back link above the header */}
-      <div className="pt-3 pb-1">
-        <a
-          href="#/welcome"
-          onClick={(e) => { e.preventDefault(); navigate('/welcome'); }}
-          className="inline-flex items-center gap-1 text-sm text-blue-700 hover:underline"
-          aria-label="Back to Welcome"
-          title="Back"
-        >
-          <span aria-hidden>←</span>
-          <span>Back</span>
-        </a>
-      </div>
-      {/* Header */}
-      <div className="py-2 flex items-center justify-between">
-          <h2 className="text-xl sm:text-2xl font-semibold text-slate-900">AI Assistant</h2>
-          <div className="flex items-center gap-3">
-            {/* Active agent indicator */}
-            <div className="text-xs sm:text-sm text-slate-700">
-              <span className="mr-1 text-slate-500">Agent:</span>
-              <span className="font-medium">{agentLabel || 'N/A'}</span>
+    <div className="flex h-screen antialiased text-gray-800">
+      {/* Left sidebar (reference to sample.jsx) */}
+      <div className="flex flex-col py-4 px-4 w-64 bg-white border-r flex-shrink-0">
+        <div className="flex items-center h-12 w-full">
+          <div className="flex items-center justify-center rounded-2xl text-indigo-700 bg-indigo-100 h-9 w-9">💬</div>
+          <div className="ml-2 font-bold text-xl">AI Assistant</div>
+        </div>
+        <div className="mt-3">
+          <a
+            href="#/welcome"
+            onClick={(e) => { e.preventDefault(); navigate('/welcome'); }}
+            className="inline-flex items-center gap-1 text-sm text-blue-700 hover:underline"
+            aria-label="Back to Welcome"
+            title="Back"
+          >
+            <span aria-hidden>←</span>
+            <span>Back</span>
+          </a>
+        </div>
+        {/* Agent and context info */}
+        <div className="mt-4 space-y-2 text-xs text-gray-700">
+          <div>
+            <span className="text-gray-500">Agent:</span>{' '}
+            <span className="font-medium">{agentLabel || 'N/A'}</span>
+          </div>
+          {agentHint && (
+            <div className="text-gray-600">{agentHint}</div>
+          )}
+          {!isUploadDisabled ? (
+            <div className="text-gray-600">
+              {activeFile ? (
+                <span title={activeFile.name} className="inline-flex items-center gap-2">
+                  Using file: <span className="font-medium truncate max-w-[8rem]">{activeFile.name}</span>
+                  <button type="button" onClick={clearActiveFile} className="ml-1 text-gray-400 hover:text-gray-700" aria-label="Clear active file">✕</button>
+                </span>
+              ) : (
+                <span className="text-gray-400">No file selected</span>
+              )}
             </div>
-            {/* Active file indicator */}
+          ) : (
+            <div className="text-gray-400">Uploads disabled</div>
+          )}
+        </div>
+      </div>
+
+      {/* Right main area (chat) */}
+      <div className="flex flex-col flex-auto h-full p-4 sm:p-6 w-0 min-w-0">
+        <div className="flex flex-col flex-auto flex-shrink-0 rounded-2xl bg-gray-100 h-full p-3 sm:p-4">
+          {/* Messages list */}
+          <div className="flex flex-col h-full overflow-y-auto overscroll-contain mb-3" ref={chatScrollRef}>
+            <div className="grid grid-cols-12 gap-y-2">
+              {messages.map((m, i) => {
+                const isUser = m.sender === 'user';
+                const col = isUser ? 'col-start-6 col-end-13' : 'col-start-1 col-end-8';
+                const align = isUser ? 'flex items-center justify-start flex-row-reverse' : 'flex flex-row items-center';
+                const bubble = isUser
+                  ? 'relative mr-3 text-sm bg-indigo-100 py-2 px-4 shadow rounded-xl'
+                  : 'relative ml-3 text-sm bg-white py-2 px-4 shadow rounded-xl';
+
+                if (m.type === 'file') {
+                  const status = m.file?.status;
+                  const statusText = status === 'uploading' ? 'Uploading…' : status === 'ready' ? 'Uploaded' : status === 'error' ? 'Failed' : '';
+                  return (
+                    <div key={m.id || i} className={`${col} p-2 rounded-lg`}>
+                      <div className={align}>
+                        <div className="flex items-center justify-center h-9 w-9 rounded-full bg-indigo-500 text-white flex-shrink-0">F</div>
+                        <div className={bubble}>
+                          <div className="text-sm font-medium" title={m.file?.name}>{m.file?.name}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {typeof m.file?.size === 'number' && <span>{(m.file.size / 1024).toFixed(1)} KB • </span>}
+                            <span>{statusText}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (m.type === 'typing') {
+                  return (
+                    <div key={m.id || i} className={`${col} p-2 rounded-lg`}>
+                      <div className={align}>
+                        <div className="flex items-center justify-center h-9 w-9 rounded-full bg-indigo-500 text-white flex-shrink-0">🧠</div>
+                        <div className={bubble}>Typing...</div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={m.id || i} className={`${col} p-2 rounded-lg`}>
+                    <div className={align}>
+                      <div className="flex items-center justify-center h-9 w-9 rounded-full bg-indigo-500 text-white flex-shrink-0">{isUser ? 'U' : 'A'}</div>
+                      <div className={bubble}>{String(m.text ?? '')}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Composer */}
+          <form onSubmit={onSend} className="flex flex-row items-center h-16 rounded-xl bg-white w-full px-3 sm:px-4">
             {!isUploadDisabled && (
-              <div className="text-xs sm:text-sm text-slate-600">
-                {activeFile ? (
-                  <span title={activeFile.name} className="inline-flex items-center gap-2">
-                    Using file: <span className="font-medium">{activeFile.name}</span>
-                    <button type="button" onClick={clearActiveFile} className="ml-1 text-slate-400 hover:text-slate-700" aria-label="Clear active file">✕</button>
-                  </span>
-                ) : (
-                  <span className="text-slate-400">No file selected</span>
-                )}
+              <div>
+                <button
+                  type="button"
+                  onClick={onAttachClick}
+                  className="flex items-center justify-center text-gray-400 hover:text-gray-600"
+                  title="Upload file"
+                  aria-label="Upload file"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.txt,.csv"
+                  className="hidden"
+                  onChange={onFileChange}
+                />
               </div>
             )}
-            {isUploadDisabled && (
-              <div className="text-xs sm:text-sm text-slate-400">Uploads disabled</div>
-            )}
-          </div>
-        </div>
-
-      {/* Agent-specific hint */}
-      {agentHint && (
-        <div className="mb-2 text-xs sm:text-sm text-slate-600">{agentHint}</div>
-      )}
-
-      {/* Messages */}
-      <div ref={chatScrollRef} className="min-h-[40vh] max-h-[65vh] overflow-y-auto border rounded-2xl p-3 sm:p-4 bg-slate-50">
-        {messages.map(renderMessage)}
-      </div>
-
-      {/* Composer */}
-      <form onSubmit={onSend} className="mt-3 sm:mt-4 flex items-center gap-2">
-          {!isUploadDisabled && (
-            <>
+            <div className="flex-grow ml-3">
+              <div className="relative w-full">
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  className="flex w-full border rounded-xl focus:outline-none focus:border-indigo-300 pl-4 h-10 text-sm"
+                  placeholder="Type your message..."
+                  aria-label="Message input"
+                />
+              </div>
+            </div>
+            <div className="ml-3">
               <button
-                type="button"
-                onClick={onAttachClick}
-                className="rounded-lg border px-3 py-2 text-sm bg-white hover:bg-slate-50"
-                title="Upload file"
-                aria-label="Upload file"
+                type="submit"
+                className="flex items-center justify-center bg-indigo-500 hover:bg-indigo-600 rounded-xl text-white px-4 py-2 flex-shrink-0"
+                aria-label="Send message"
               >
-                +
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.txt,.csv"
-                className="hidden"
-                onChange={onFileChange}
-              />
-
-              {attachedFile && (
-                <span className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs text-slate-700">
-                  <span className="truncate max-w-[10rem]" title={attachedFile.name}>{attachedFile.name}</span>
-                  <button type="button" onClick={onRemoveAttachment} aria-label="Remove attachment" className="text-slate-400 hover:text-slate-700">✕</button>
+                <span>Send</span>
+                <span className="ml-2">
+                  <svg className="w-4 h-4 transform rotate-45 -mt-px" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
                 </span>
-              )}
-            </>
-          )}
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            className="flex-1 border rounded-xl px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base"
-            placeholder="Type your message..."
-            aria-label="Message input"
-          />
-          <button
-            type="submit"
-            className="text-white px-4 sm:px-5 py-2 rounded-xl text-sm sm:text-base bg-indigo-600 hover:bg-indigo-500"
-            aria-label="Send message"
-          >
-            Send
-          </button>
-      </form>
+              </button>
+            </div>
+            {!isUploadDisabled && attachedFile && (
+              <span className="ml-3 inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs text-slate-700">
+                <span className="truncate max-w-[10rem]" title={attachedFile.name}>{attachedFile.name}</span>
+                <button type="button" onClick={onRemoveAttachment} aria-label="Remove attachment" className="text-slate-400 hover:text-slate-700">✕</button>
+              </span>
+            )}
+          </form>
+        </div>
+      </div>
     </div>
   );
 }
