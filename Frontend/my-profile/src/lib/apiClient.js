@@ -50,7 +50,8 @@ export async function listAgents(signal, { force = false } = {}) {
     return {
       id,
       label: toPrettyLabel(it?.label || it?.name || it?.title || id),
-      description: it?.description || '',
+      description: it?.description,
+      welcomeMessage: it?.welcomemessage,
       uploadEnabled: parseUploadFlag(it),
       raw: it,
     };

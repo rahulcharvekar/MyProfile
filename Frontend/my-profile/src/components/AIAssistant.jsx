@@ -33,12 +33,11 @@ export default function AIAssistant() {
       .replace(/[_-]+/g, ' ')
       .replace(/\b\w/g, (m) => m.toUpperCase());
   }, [selectedAgentId]);
-  const agentHint = useMemo(() => {
-    const id = String(selectedAgentId || '').toLowerCase();
-    if (id === 'default') return 'General assistant over uploaded documents.';
-    if (id === 'chat_only' || id === 'chat-only') return 'Answers questions over a specified file.';
-    return 'You are now chatting with the selected agent.';
-  }, [selectedAgentId]);
+  const [agentLabelApi, setAgentLabelApi] = useState('');
+  const [agentDescription, setAgentDescription] = useState('');
+  const [agentWelcomeMessage, setAgentWelcomeMessage] = useState('');
+  const agentTitle = useMemo(() => agentLabelApi || agentLabel, [agentLabelApi, agentLabel]);
+  const agentHint = useMemo(() => agentDescription || 'You are now chatting with the selected agent.', [agentDescription]);
 
   const [isUploadEnabled, setIsUploadEnabled] = useState(true);
   const isUploadDisabled = !isUploadEnabled;
@@ -48,7 +47,7 @@ export default function AIAssistant() {
     if (!selectedAgentId) navigate('/welcome', { replace: true });
   }, [selectedAgentId, navigate]);
 
-  // Fetch agent metadata to decide upload capability
+  // Fetch agent metadata to decide upload capability and get description/welcome/label
   useEffect(() => {
     let isActive = true;
     const fetchMeta = async () => {
@@ -58,6 +57,11 @@ export default function AIAssistant() {
         const entry = byId[selectedAgentId];
         if (entry && typeof entry.uploadEnabled === 'boolean') {
           if (isActive) setIsUploadEnabled(entry.uploadEnabled);
+        }
+        if (entry) {
+          if (isActive) setAgentLabelApi(entry.label || '');
+          if (isActive) setAgentDescription(entry.description || '');
+          if (isActive) setAgentWelcomeMessage(entry.welcomeMessage || '');
         }
       } catch (_) {
         // ignore errors; keep default
@@ -99,18 +103,29 @@ export default function AIAssistant() {
     }
   }, [messages]);
 
-  // Seed a contextual welcome message when the agent changes
+  // Seed a contextual welcome message when the agent changes.
+  // If API welcomeMessage arrives after initial render, update the first
+  // message from default -> API-provided text without duplicating.
   useEffect(() => {
     if (!selectedAgentId) return;
     setMessages((prev) => {
       // only add if first message or agent changed context
+      const apiWelcome = (agentWelcomeMessage || '').trim();
       if (prev.length === 0 || prev[0]?.meta !== selectedAgentId) {
-        const welcome = `👋 You are now chatting with ${agentLabel || 'the selected'} agent. ${agentHint}`.trim();
-        return [{ id: `welcome-${Date.now()}`, meta: selectedAgentId, sender: 'bot', type: 'text', text: welcome }];
+        const defaultWelcome = `👋 You are now chatting with ${agentTitle || 'the selected'} agent.`;
+        const welcome = apiWelcome || `${defaultWelcome} ${agentHint}`.trim();
+        const welcomeSource = apiWelcome ? 'api' : 'default';
+        return [{ id: `welcome-${Date.now()}`, meta: selectedAgentId, sender: 'bot', type: 'text', text: welcome, welcomeSource }];
+      }
+      // If we already showed a default welcome and API welcome becomes available, replace it.
+      if (prev[0]?.meta === selectedAgentId && prev[0]?.welcomeSource === 'default' && apiWelcome) {
+        const updated = [...prev];
+        updated[0] = { ...updated[0], text: apiWelcome, welcomeSource: 'api' };
+        return updated;
       }
       return prev;
     });
-  }, [selectedAgentId, agentLabel, agentHint]);
+  }, [selectedAgentId, agentTitle, agentHint, agentWelcomeMessage]);
 
   // Clear attachments if uploads are disabled for the selected agent
   useEffect(() => {
@@ -285,7 +300,7 @@ export default function AIAssistant() {
             <div className="relative flex items-center space-x-4">
               <div className="flex flex-col leading-tight">
                 <div className="text-xl sm:text-2xl mt-1 flex items-center">
-                  <span className="text-gray-700 mr-3">{agentLabel || 'AI Assistant'}</span>
+                  <span className="text-gray-700 mr-3">{agentTitle || 'AI Assistant'}</span>
                 </div>
                 {agentHint && <span className="text-sm text-gray-600">{agentHint}</span>}
               </div>
