@@ -30,10 +30,7 @@ export default function MainPage() {
           <Routes>
             <Route path="/" element={<Navigate to="/welcome" replace />} />
             <Route path="/welcome" element={<Welcome />} />
-            <Route path="/ai" element={<AIAssistant />} />
-            <Route path="/ai/:agentId" element={<AIAssistant />} />
-            <Route path="/agent/:agentId" element={<AIAssistant />} />
-            <Route path="/a/:agentId" element={<AIAssistant />} />
+            <Route path="/ai/:agentId" element={<AIAssistant />} />            
             {/* Additional routes can be added here if needed */}
             <Route path="*" element={<Navigate to="/welcome" replace />} />
           </Routes>
