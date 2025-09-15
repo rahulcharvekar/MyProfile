@@ -150,7 +150,7 @@ export default function AIAssistant() {
       return;
     }
     if (!ACCEPTED_EXT.test(file.name)) {
-      alert("Only PDF orr CSV files are allowed.");
+      alert("Only PDF or CSV files are allowed.");
       return;
     }
 
@@ -166,7 +166,7 @@ export default function AIAssistant() {
 
     try {
       try {
-        const data = await uploadFile(file);
+        const data = await uploadFile(file, { agent: selectedAgentId });
         // Mark uploaded and set active file name, then print response
         setMessages((prev) => prev.map((m) =>
           (m.id === uploadMsgId && m.type === 'file') ? { ...m, file: { ...m.file, status: 'ready' } } : m

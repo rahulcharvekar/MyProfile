@@ -84,11 +84,20 @@ export async function queryAgent({ input, agent, sessionId }, signal) {
   return data;
 }
 
-export async function uploadFile(file, signal) {
+export async function uploadFile(file, { agent, signal } = {}) {
   if (!endpoints.uploadSimple) throw new Error('Upload endpoint not configured');
   const formData = new FormData();
   formData.append('file', file, file.name);
-  const res = await fetch(endpoints.uploadSimple, { method: 'POST', body: formData, signal });
+  // Build URL and append optional agent query param
+  let url;
+  try {
+    url = new URL(endpoints.uploadSimple, window.location.origin);
+  } catch (_) {
+    // Fallback: assume relative path
+    url = new URL(String(endpoints.uploadSimple || '/'), window.location.origin);
+  }
+  if (agent) url.searchParams.set('agent', String(agent));
+  const res = await fetch(url.toString(), { method: 'POST', body: formData, signal });
   let data = null;
   try { data = await res.json(); } catch (_) { /* noop */ }
   if (!res.ok) {
