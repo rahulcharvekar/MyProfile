@@ -17,6 +17,29 @@ const parseUploadFlag = (entry) => {
   return true; // default allow
 };
 
+// Extract and normalize capabilities from a variety of possible shapes
+const normalizeCapabilities = (entry) => {
+  let rawCaps = entry?.capabilities ?? entry?.caps ?? entry?.features ?? entry?.abilities;
+  let list = [];
+  if (Array.isArray(rawCaps)) {
+    list = rawCaps;
+  } else if (rawCaps && typeof rawCaps === 'object') {
+    // treat object keys with truthy values as enabled capabilities
+    list = Object.entries(rawCaps)
+      .filter(([, v]) => Boolean(v))
+      .map(([k]) => k);
+  } else if (typeof rawCaps === 'string') {
+    // split by comma/space/pipe
+    list = rawCaps.split(/[\s,|]+/g).filter(Boolean);
+  }
+  // clean up strings and presentable labels
+  const cleaned = list
+    .map((s) => String(s).trim())
+    .filter((s) => s.length > 0)
+    .map((s) => s.replace(/[_-]+/g, ' '));
+  return cleaned;
+};
+
 // simple in-memory cache for agent list
 let _agentsCache = null; // { at: number, value: { raw, list, byId } }
 const AGENTS_TTL_MS = 60_000; // 60s
@@ -47,12 +70,16 @@ export async function listAgents(signal, { force = false } = {}) {
 
   const normalized = list.map((it, idx) => {
     const id = String(it?.id ?? it?.agent_id ?? it?.name ?? idx);
+    const capabilities = normalizeCapabilities(it);
+    const hasUploadCapability = capabilities.some((c) => c.toLowerCase().includes('upload'));
     return {
       id,
       label: toPrettyLabel(it?.label || it?.name || it?.title || id),
       description: it?.description,
       welcomeMessage: it?.welcomemessage,
-      uploadEnabled: parseUploadFlag(it),
+      // Prefer capabilities to drive upload visibility; fallback to legacy flags
+      uploadEnabled: capabilities.length ? hasUploadCapability : parseUploadFlag(it),
+      capabilities,
       raw: it,
     };
   });

@@ -47,7 +47,7 @@ export default function AIAssistant() {
     if (!selectedAgentId) navigate('/welcome', { replace: true });
   }, [selectedAgentId, navigate]);
 
-  // Fetch agent metadata to decide upload capability and get description/welcome/label
+  // Fetch agent metadata to decide capabilities (incl. upload) and get description/welcome/label
   useEffect(() => {
     let isActive = true;
     const fetchMeta = async () => {
@@ -55,8 +55,15 @@ export default function AIAssistant() {
       try {
         const { byId } = await listAgents();
         const entry = byId[selectedAgentId];
-        if (entry && typeof entry.uploadEnabled === 'boolean') {
-          if (isActive) setIsUploadEnabled(entry.uploadEnabled);
+        if (entry) {
+          // Prefer capabilities to decide upload visibility
+          const caps = Array.isArray(entry.capabilities) ? entry.capabilities : [];
+          if (caps.length) {
+            const hasUpload = caps.some((c) => typeof c === 'string' && c.toLowerCase().includes('upload'));
+            if (isActive) setIsUploadEnabled(Boolean(hasUpload));
+          } else if (typeof entry.uploadEnabled === 'boolean') {
+            if (isActive) setIsUploadEnabled(entry.uploadEnabled);
+          }
         }
         if (entry) {
           if (isActive) setAgentLabelApi(entry.label || '');
