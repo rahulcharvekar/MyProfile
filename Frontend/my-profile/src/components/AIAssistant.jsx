@@ -5,7 +5,7 @@ import { listAgents, queryAgent, uploadFile } from '../lib/apiClient';
 
 // Clean ChatGPT-like UI only (no API integration yet)
 // - Scrollable conversation
-// - + button to attach one file (pdf/csv)
+// - + button to attach one file (pdf/doc/docx/txt/csv)
 // - Sending shows user's text and optional file bubble
 
 export default function AIAssistant() {
@@ -23,7 +23,7 @@ export default function AIAssistant() {
   const chatScrollRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const ACCEPTED_EXT = /(\.pdf|\.csv)$/i;
+  const ACCEPTED_EXT = /(\.pdf|\.csv|\.docx|\.doc|\.txt)$/i;
   const MAX_SIZE_BYTES = 200 * 1024 * 1024; // 200MB
   const DEFAULT_AGENT_ID = import.meta.env.VITE_DEFAULT_AGENT_ID;
   const selectedAgentId = agentFromPathParam || agentFromUrl || (DEFAULT_AGENT_ID || "");
@@ -117,10 +117,10 @@ export default function AIAssistant() {
     if (!selectedAgentId) return;
     setMessages((prev) => {
       // only add if first message or agent changed context
-      const apiWelcome = (agentWelcomeMessage || '').trim();
+      const apiWelcome = (agentWelcomeMessage || '').trim().replace(/\\n/g, '\n');
       if (prev.length === 0 || prev[0]?.meta !== selectedAgentId) {
         const defaultWelcome = `👋 You are now chatting with ${agentTitle || 'the selected'} agent.`;
-        const welcome = apiWelcome || `${defaultWelcome} ${agentHint}`.trim();
+        const welcome = (apiWelcome || `${defaultWelcome} ${agentHint}`.trim()).replace(/\\n/g, '\n');
         const welcomeSource = apiWelcome ? 'api' : 'default';
         return [{ id: `welcome-${Date.now()}`, meta: selectedAgentId, sender: 'bot', type: 'text', text: welcome, welcomeSource }];
       }
@@ -157,7 +157,7 @@ export default function AIAssistant() {
       return;
     }
     if (!ACCEPTED_EXT.test(file.name)) {
-      alert("Only PDF or CSV files are allowed.");
+      alert("Only PDF/CSV/DOCX/DOC/TXT files are allowed.");
       return;
     }
 
@@ -235,15 +235,15 @@ export default function AIAssistant() {
     setMessages((prev) => [...prev, { id: `typing-${Date.now()}`, sender: 'bot', type: 'typing', text: '__typing__' }]);
 
     try {
-      const inputText = (!isUploadDisabled && activeFile?.name)
-        ? `Answer using file '${activeFile.name}': ${trimmed}`
-        : trimmed;
+      const inputText = trimmed;
+      console.log(inputText)
       const data = await queryAgent({ input: inputText, agent: selectedAgentId, sessionId: sessionIdRef.current });
       const botText =
         (typeof data?.response === 'string' && data.response) ||
         (typeof data === 'string' && data) ||
         data?.message ||
         '✅ Done.';
+        console.log(data)
     endTypingWith(botText);
   } catch (err) {
     console.error(err);
@@ -253,7 +253,7 @@ export default function AIAssistant() {
 };
 
   const renderMessage = (m, i) => {
-    const bubbleBase = "px-3 py-2 sm:px-4 sm:py-2 rounded-2xl max-w-[85%] sm:max-w-[70%] break-words";
+    const bubbleBase = "px-3 py-2 sm:px-4 sm:py-2 rounded-2xl max-w-[85%] sm:max-w-[70%] break-words whitespace-pre-wrap";
     const align = m.sender === "user" ? "justify-end" : "justify-start";
     const color = m.sender === "user" ? "bg-indigo-600 text-white" : "bg-white border";
 
@@ -361,7 +361,7 @@ export default function AIAssistant() {
                 </button>
               </div>
               {!isUploadDisabled && (
-                <input ref={fileInputRef} type="file" accept=".pdf,.txt,.csv" className="hidden" onChange={onFileChange} />
+                <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv" className="hidden" onChange={onFileChange} />
               )}
             </form>
             {!isUploadDisabled && attachedFile && (
