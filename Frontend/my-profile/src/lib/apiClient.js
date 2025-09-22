@@ -40,6 +40,32 @@ const normalizeCapabilities = (entry) => {
   return cleaned;
 };
 
+// Normalize commands into an array of { cmd, desc }
+const normalizeCommands = (entry) => {
+  const raw = entry?.commands ?? entry?.cmds ?? entry?.tools;
+  const out = [];
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (typeof item === 'string') {
+        out.push({ cmd: item, desc: '' });
+        continue;
+      }
+      if (item && typeof item === 'object') {
+        const cmd = String(item.cmd ?? item.command ?? item.name ?? '').trim();
+        const desc = String(item.desc ?? item.description ?? '').trim();
+        if (cmd) out.push({ cmd, desc });
+      }
+    }
+  } else if (raw && typeof raw === 'object') {
+    for (const [k, v] of Object.entries(raw)) {
+      const cmd = String(k).trim();
+      const desc = String(v ?? '').trim();
+      if (cmd) out.push({ cmd, desc });
+    }
+  }
+  return out;
+};
+
 // simple in-memory cache for agent list
 let _agentsCache = null; // { at: number, value: { raw, list, byId } }
 const AGENTS_TTL_MS = 60_000; // 60s
@@ -80,6 +106,7 @@ export async function listAgents(signal, { force = false } = {}) {
       // Prefer capabilities to drive upload visibility; fallback to legacy flags
       uploadEnabled: capabilities.length ? hasUploadCapability : parseUploadFlag(it),
       capabilities,
+      commands: normalizeCommands(it),
       raw: it,
     };
   });

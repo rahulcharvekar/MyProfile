@@ -22,6 +22,7 @@ export default function AIAssistant() {
 
   const chatScrollRef = useRef(null);
   const fileInputRef = useRef(null);
+  const textInputRef = useRef(null);
 
   const ACCEPTED_EXT = /(\.pdf|\.csv|\.docx|\.doc|\.txt)$/i;
   const MAX_SIZE_BYTES = 200 * 1024 * 1024; // 200MB
@@ -36,11 +37,18 @@ export default function AIAssistant() {
   const [agentLabelApi, setAgentLabelApi] = useState('');
   const [agentDescription, setAgentDescription] = useState('');
   const [agentWelcomeMessage, setAgentWelcomeMessage] = useState('');
+  const [agentCommands, setAgentCommands] = useState([]); // [{cmd, desc}]
+  const [selectedCommand, setSelectedCommand] = useState(''); // string like '/listfiles'
   const agentTitle = useMemo(() => agentLabelApi || agentLabel, [agentLabelApi, agentLabel]);
   const agentHint = useMemo(() => agentDescription || 'You are now chatting with the selected agent.', [agentDescription]);
 
   const [isUploadEnabled, setIsUploadEnabled] = useState(true);
   const isUploadDisabled = !isUploadEnabled;
+
+  // Reset command selection when agent changes
+  useEffect(() => {
+    setSelectedCommand('');
+  }, [selectedAgentId]);
 
   // If no agent provided, redirect to welcome
   useEffect(() => {
@@ -69,6 +77,7 @@ export default function AIAssistant() {
           if (isActive) setAgentLabelApi(entry.label || '');
           if (isActive) setAgentDescription(entry.description || '');
           if (isActive) setAgentWelcomeMessage(entry.welcomeMessage || '');
+          if (isActive) setAgentCommands(Array.isArray(entry.commands) ? entry.commands : []);
         }
       } catch (_) {
         // ignore errors; keep default
@@ -228,6 +237,8 @@ export default function AIAssistant() {
     if (nextMsgs.length) setMessages((prev) => [...prev, ...nextMsgs]);
 
     setInput("");
+    // Reset command dropdown to default after sending
+    setSelectedCommand('');
     
     // If endpoint configured, send the message as JSON
     if (!endpoints.agentQuery) return;
@@ -335,34 +346,54 @@ export default function AIAssistant() {
 
           {/* Composer */}
           <div className="border-t-2 border-gray-200 pt-3 mt-2">
-            <form onSubmit={onSend} className="relative flex">
-              <span className="absolute inset-y-0 flex items-center">
-                {!isUploadDisabled && (
+            <form onSubmit={onSend} className="flex items-center gap-2">
+              {!isUploadDisabled && (
+                <>
                   <button type="button" onClick={onAttachClick} className="inline-flex items-center justify-center rounded-full h-10 w-10 text-gray-500 hover:bg-gray-300" title="Attach file" aria-label="Attach file">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6 text-gray-600">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                     </svg>
                   </button>
-                )}
-              </span>
+                  <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv" className="hidden" onChange={onFileChange} />
+                </>
+              )}
+              {agentCommands.length > 0 && (
+                <select
+                  value={selectedCommand}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSelectedCommand(v);
+                    if (v) {
+                      setInput(`${v} `);
+                      setTimeout(() => textInputRef.current?.focus(), 0);
+                    }
+                  }}
+                  className="h-10 bg-white border rounded-md px-2 text-gray-700 max-w-[220px] truncate"
+                  title={selectedCommand ? (agentCommands.find(c => c.cmd === selectedCommand)?.desc || '') : 'Select a command'}
+                  aria-label="Command selector"
+                >
+                  <option value="">Command…</option>
+                  {agentCommands.map((c, idx) => (
+                    <option key={`${c.cmd}-${idx}`} value={c.cmd} title={c.desc || ''}>
+                      {c.cmd}
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
+                ref={textInputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Write your message!"
-                className="w-full focus:outline-none focus:placeholder-gray-400 text-gray-700 placeholder-gray-600 pl-12 bg-white rounded-md py-3"
+                className="flex-1 focus:outline-none focus:placeholder-gray-400 text-gray-700 placeholder-gray-600 bg-white rounded-md py-3 px-3"
                 aria-label="Message input"
               />
-              <div className="absolute right-0 items-center inset-y-0 hidden sm:flex">
-                <button type="submit" className="inline-flex items-center justify-center rounded-lg px-4 py-3 text-white bg-blue-500 hover:bg-blue-400">
-                  <span className="font-bold">Send</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-6 w-6 ml-2 transform rotate-90">
-                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                  </svg>
-                </button>
-              </div>
-              {!isUploadDisabled && (
-                <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv" className="hidden" onChange={onFileChange} />
-              )}
+              <button type="submit" className="inline-flex items-center justify-center rounded-lg px-4 py-3 text-white bg-blue-500 hover:bg-blue-400">
+                <span className="font-bold">Send</span>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-6 w-6 ml-2 transform rotate-90">
+                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                </svg>
+              </button>
             </form>
             {!isUploadDisabled && attachedFile && (
               <div className="mt-2 text-xs text-gray-600">Attached: <span className="font-medium">{attachedFile.name}</span> <button type="button" onClick={onRemoveAttachment} className="ml-2 text-gray-400 hover:text-gray-700">✕</button></div>
