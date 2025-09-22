@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { endpoints } from '../lib/apiConfig';
-import { listAgents, queryAgent, uploadFile } from '../lib/apiClient';
-
-// Clean ChatGPT-like UI only (no API integration yet)
-// - Scrollable conversation
-// - + button to attach one file (pdf/doc/docx/txt/csv)
-// - Sending shows user's text and optional file bubble
+import { queryAgent, uploadFile } from '../lib/apiClient';
+import { makePrettyIdLabel, validateAttachment, makeWelcomeText, normalizeNewlines, parseBotResponse } from '../lib/chatUtils';
+import useSessionId from '../hooks/useSessionId';
+import useAgentMeta from '../hooks/useAgentMeta';
+import useAutoScroll from '../hooks/useAutoScroll';
+import Composer from './Composer/Composer';
 
 export default function AIAssistant() {
   const navigate = useNavigate();
@@ -14,78 +14,29 @@ export default function AIAssistant() {
   const [searchParams] = useSearchParams();
   const agentFromUrl = searchParams.get('agent') || '';
   const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
   const [attachedFile, setAttachedFile] = useState(null); // File | null (kept and sent with each message until cleared)
   const [activeFile, setActiveFile] = useState(null);     // { name: string }
   // Selected agent is provided via URL param (from Welcome page).
   // We keep a small mapping for friendly labels and hints.
 
   const chatScrollRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const textInputRef = useRef(null);
 
   const ACCEPTED_EXT = /(\.pdf|\.csv|\.docx|\.doc|\.txt)$/i;
   const MAX_SIZE_BYTES = 200 * 1024 * 1024; // 200MB
   const DEFAULT_AGENT_ID = import.meta.env.VITE_DEFAULT_AGENT_ID;
   const selectedAgentId = agentFromPathParam || agentFromUrl || (DEFAULT_AGENT_ID || "");
-  const agentLabel = useMemo(() => {
-    if (!selectedAgentId) return '';
-    return String(selectedAgentId)
-      .replace(/[_-]+/g, ' ')
-      .replace(/\b\w/g, (m) => m.toUpperCase());
-  }, [selectedAgentId]);
-  const [agentLabelApi, setAgentLabelApi] = useState('');
-  const [agentDescription, setAgentDescription] = useState('');
-  const [agentWelcomeMessage, setAgentWelcomeMessage] = useState('');
-  const [agentCommands, setAgentCommands] = useState([]); // [{cmd, desc}]
-  const [selectedCommand, setSelectedCommand] = useState(''); // string like '/listfiles'
+  const agentLabel = useMemo(() => makePrettyIdLabel(selectedAgentId), [selectedAgentId]);
+  const { label: agentLabelApi, description: agentDescription, welcomeMessage: agentWelcomeMessage, commands: agentCommands, isUploadEnabled } = useAgentMeta(selectedAgentId);
   const agentTitle = useMemo(() => agentLabelApi || agentLabel, [agentLabelApi, agentLabel]);
   const agentHint = useMemo(() => agentDescription || 'You are now chatting with the selected agent.', [agentDescription]);
-
-  const [isUploadEnabled, setIsUploadEnabled] = useState(true);
   const isUploadDisabled = !isUploadEnabled;
-
-  // Reset command selection when agent changes
-  useEffect(() => {
-    setSelectedCommand('');
-  }, [selectedAgentId]);
 
   // If no agent provided, redirect to welcome
   useEffect(() => {
     if (!selectedAgentId) navigate('/welcome', { replace: true });
   }, [selectedAgentId, navigate]);
 
-  // Fetch agent metadata to decide capabilities (incl. upload) and get description/welcome/label
-  useEffect(() => {
-    let isActive = true;
-    const fetchMeta = async () => {
-      if (!selectedAgentId || !endpoints.agentList) return;
-      try {
-        const { byId } = await listAgents();
-        const entry = byId[selectedAgentId];
-        if (entry) {
-          // Prefer capabilities to decide upload visibility
-          const caps = Array.isArray(entry.capabilities) ? entry.capabilities : [];
-          if (caps.length) {
-            const hasUpload = caps.some((c) => typeof c === 'string' && c.toLowerCase().includes('upload'));
-            if (isActive) setIsUploadEnabled(Boolean(hasUpload));
-          } else if (typeof entry.uploadEnabled === 'boolean') {
-            if (isActive) setIsUploadEnabled(entry.uploadEnabled);
-          }
-        }
-        if (entry) {
-          if (isActive) setAgentLabelApi(entry.label || '');
-          if (isActive) setAgentDescription(entry.description || '');
-          if (isActive) setAgentWelcomeMessage(entry.welcomeMessage || '');
-          if (isActive) setAgentCommands(Array.isArray(entry.commands) ? entry.commands : []);
-        }
-      } catch (_) {
-        // ignore errors; keep default
-      }
-    };
-    fetchMeta();
-    return () => { isActive = false; };
-  }, [selectedAgentId]);
+  // Agent meta (moved to hook)
 
   // Clear any file state when uploads are disabled
   useEffect(() => {
@@ -96,28 +47,10 @@ export default function AIAssistant() {
   }, [isUploadEnabled]);
 
   // Persist a session id so backend can keep chat history across turns
-  const sessionIdRef = useRef(null);
-  if (!sessionIdRef.current) {
-    try {
-      const existing = localStorage.getItem('ai_session_id');
-      if (existing) {
-        sessionIdRef.current = existing;
-      } else {
-        const sid = `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        localStorage.setItem('ai_session_id', sid);
-        sessionIdRef.current = sid;
-      }
-    } catch (_) {
-      sessionIdRef.current = `web-${Date.now()}`;
-    }
-  }
+  const sessionId = useSessionId('ai_session_id');
 
   // Auto-scroll to latest message
-  useEffect(() => {
-    if (chatScrollRef.current) {
-      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-    }
-  }, [messages]);
+  useAutoScroll(chatScrollRef, [messages]);
 
   // Seed a contextual welcome message when the agent changes.
   // If API welcomeMessage arrives after initial render, update the first
@@ -126,10 +59,9 @@ export default function AIAssistant() {
     if (!selectedAgentId) return;
     setMessages((prev) => {
       // only add if first message or agent changed context
-      const apiWelcome = (agentWelcomeMessage || '').trim().replace(/\\n/g, '\n');
+      const apiWelcome = normalizeNewlines(agentWelcomeMessage || '');
       if (prev.length === 0 || prev[0]?.meta !== selectedAgentId) {
-        const defaultWelcome = `👋 You are now chatting with ${agentTitle || 'the selected'} agent.`;
-        const welcome = (apiWelcome || `${defaultWelcome} ${agentHint}`.trim()).replace(/\\n/g, '\n');
+        const welcome = makeWelcomeText({ apiWelcome, agentTitle, agentHint });
         const welcomeSource = apiWelcome ? 'api' : 'default';
         return [{ id: `welcome-${Date.now()}`, meta: selectedAgentId, sender: 'bot', type: 'text', text: welcome, welcomeSource }];
       }
@@ -143,30 +75,13 @@ export default function AIAssistant() {
     });
   }, [selectedAgentId, agentTitle, agentHint, agentWelcomeMessage]);
 
-  // Clear attachments if uploads are disabled for the selected agent
-  useEffect(() => {
-    if (!isUploadEnabled) {
-      setAttachedFile(null);
-      setActiveFile(null);
-    }
-  }, [isUploadEnabled]);
+  // (removed duplicate clear-attachments effect; one exists above)
 
-  const onAttachClick = () => {
-    if (isUploadDisabled) return;
-    fileInputRef.current?.click();
-  };
-
-  const onFileChange = async (e) => {
-    if (isUploadDisabled) return;
-    const file = e.target.files?.[0] || null;
-    e.target.value = ""; // allow reselection of the same file
-    if (!file) return;
-    if (file.size > MAX_SIZE_BYTES) {
-      alert("File too large. Max allowed size is 200MB.");
-      return;
-    }
-    if (!ACCEPTED_EXT.test(file.name)) {
-      alert("Only PDF/CSV/DOCX/DOC/TXT files are allowed.");
+  const onFileSelected = async (file) => {
+    if (isUploadDisabled || !file) return;
+    const v = validateAttachment(file, { acceptRe: ACCEPTED_EXT, maxBytes: MAX_SIZE_BYTES });
+    if (!v.ok) {
+      alert(v.error === 'File too large' ? "File too large. Max allowed size is 200MB." : "Only PDF/CSV/DOCX/DOC/TXT files are allowed.");
       return;
     }
 
@@ -227,41 +142,24 @@ export default function AIAssistant() {
     });
   };
 
-  const onSend = async (e) => {
-    e.preventDefault();
-    const trimmed = input.trim();
+  const onSend = async (text) => {
+    const trimmed = String(text || '').trim();
     if (!trimmed) return;
+    setMessages((prev) => [...prev, { id: `msg-${Date.now()}`, sender: 'user', type: 'text', text: trimmed }]);
 
-    const nextMsgs = [];
-    nextMsgs.push({ id: `msg-${Date.now()}`, sender: "user", type: "text", text: trimmed });
-    if (nextMsgs.length) setMessages((prev) => [...prev, ...nextMsgs]);
-
-    setInput("");
-    // Reset command dropdown to default after sending
-    setSelectedCommand('');
-    
-    // If endpoint configured, send the message as JSON
     if (!endpoints.agentQuery) return;
-    // show typing
     setMessages((prev) => [...prev, { id: `typing-${Date.now()}`, sender: 'bot', type: 'typing', text: '__typing__' }]);
 
     try {
-      const inputText = trimmed;
-      console.log(inputText)
-      const data = await queryAgent({ input: inputText, agent: selectedAgentId, sessionId: sessionIdRef.current });
-      const botText =
-        (typeof data?.response === 'string' && data.response) ||
-        (typeof data === 'string' && data) ||
-        data?.message ||
-        '✅ Done.';
-        console.log(data)
-    endTypingWith(botText);
-  } catch (err) {
-    console.error(err);
-    const msg = String(err?.message || 'Error sending message.');
-    endTypingWith(`❌ ${msg}`);
-  }
-};
+      const data = await queryAgent({ input: trimmed, agent: selectedAgentId, sessionId });
+      const botText = parseBotResponse(data);
+      endTypingWith(botText);
+    } catch (err) {
+      console.error(err);
+      const msg = String(err?.message || 'Error sending message.');
+      endTypingWith(`❌ ${msg}`);
+    }
+  };
 
   const renderMessage = (m, i) => {
     const bubbleBase = "px-3 py-2 sm:px-4 sm:py-2 rounded-2xl max-w-[85%] sm:max-w-[70%] break-words whitespace-pre-wrap";
@@ -346,55 +244,13 @@ export default function AIAssistant() {
 
           {/* Composer */}
           <div className="border-t-2 border-gray-200 pt-3 mt-2">
-            <form onSubmit={onSend} className="flex items-center gap-2">
-              {!isUploadDisabled && (
-                <>
-                  <button type="button" onClick={onAttachClick} className="inline-flex items-center justify-center rounded-full h-10 w-10 text-gray-500 hover:bg-gray-300" title="Attach file" aria-label="Attach file">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6 text-gray-600">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                    </svg>
-                  </button>
-                  <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv" className="hidden" onChange={onFileChange} />
-                </>
-              )}
-              {agentCommands.length > 0 && (
-                <select
-                  value={selectedCommand}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setSelectedCommand(v);
-                    if (v) {
-                      setInput(`${v} `);
-                      setTimeout(() => textInputRef.current?.focus(), 0);
-                    }
-                  }}
-                  className="h-10 bg-white border rounded-md px-2 text-gray-700 max-w-[220px] truncate"
-                  title={selectedCommand ? (agentCommands.find(c => c.cmd === selectedCommand)?.desc || '') : 'Select a command'}
-                  aria-label="Command selector"
-                >
-                  <option value="">Command…</option>
-                  {agentCommands.map((c, idx) => (
-                    <option key={`${c.cmd}-${idx}`} value={c.cmd} title={c.desc || ''}>
-                      {c.cmd}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <input
-                ref={textInputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Write your message!"
-                className="flex-1 focus:outline-none focus:placeholder-gray-400 text-gray-700 placeholder-gray-600 bg-white rounded-md py-3 px-3"
-                aria-label="Message input"
-              />
-              <button type="submit" className="inline-flex items-center justify-center rounded-lg px-4 py-3 text-white bg-blue-500 hover:bg-blue-400">
-                <span className="font-bold">Send</span>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-6 w-6 ml-2 transform rotate-90">
-                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                </svg>
-              </button>
-            </form>
+            <Composer
+              key={`composer-${selectedAgentId}`}
+              isUploadDisabled={!isUploadEnabled}
+              agentCommands={agentCommands}
+              onFileSelected={onFileSelected}
+              onSend={onSend}
+            />
             {!isUploadDisabled && attachedFile && (
               <div className="mt-2 text-xs text-gray-600">Attached: <span className="font-medium">{attachedFile.name}</span> <button type="button" onClick={onRemoveAttachment} className="ml-2 text-gray-400 hover:text-gray-700">✕</button></div>
             )}
