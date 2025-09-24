@@ -1,4 +1,4 @@
-import { endpoints } from './apiConfig';
+import { endpoints, getAgentQueryUrl, getAgentListFilesUrl } from './apiConfig';
 
 const toPrettyLabel = (idOrName) => String(idOrName || '')
   .replace(/[_-]+/g, ' ')
@@ -117,12 +117,40 @@ export async function listAgents(signal, { force = false } = {}) {
   return value;
 }
 
-export async function queryAgent({ input, agent, sessionId }, signal) {
-  if (!endpoints.agentQuery) throw new Error('Agent query endpoint not configured');
-  const res = await fetch(endpoints.agentQuery, {
+export async function resolveAgentPath(agent) {
+  if (!agent) return '';
+  try {
+    const cache = await listAgents();
+    const entry = cache?.byId?.[String(agent)] || null;
+    if (!entry) return String(agent);
+    const raw = entry.raw || {};
+    const seg = raw.path || raw.slug || raw.name || entry.id || agent;
+    return String(seg);
+  } catch (_) {
+    return String(agent);
+  }
+}
+
+export async function queryAgent({ input, agent, sessionId, extraTools, filename, fileOverride }, signal) {
+  const agentSeg = await resolveAgentPath(agent);
+  const url = getAgentQueryUrl(agentSeg) || endpoints.agentQuery;
+  if (!url) throw new Error('Agent query endpoint not configured');
+  const payload = {
+    // New API fields
+    input,
+    session_id: sessionId,
+    filename: filename,
+    extra_tools: Array.isArray(extraTools) ? extraTools : undefined,
+    // Optional compatibility fields when servers expect older names
+    // (kept harmless; many servers ignore unknown keys)
+    input_text: input,
+    agent_name: agent,
+    file_override: fileOverride,
+  };
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ input, agent, session_id: sessionId }),
+    body: JSON.stringify(payload),
     signal,
   });
   let data = null;
@@ -160,4 +188,19 @@ export async function uploadFile(file, { agent, signal } = {}) {
     throw err;
   }
   return data;
+}
+
+export async function listAgentFiles(agent, signal) {
+  const agentSeg = await resolveAgentPath(agent);
+  const url = getAgentListFilesUrl(agentSeg);
+  if (!url) return [];
+  const res = await fetch(url, { method: 'GET', signal });
+  let data = null;
+  try { data = await res.json(); } catch (_) { /* noop */ }
+  if (!res.ok) return [];
+  // Normalize return to array of strings (filenames)
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.files)) return data.files;
+  if (Array.isArray(data?.data?.files)) return data.data.files;
+  return [];
 }

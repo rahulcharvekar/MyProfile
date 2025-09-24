@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
-import { endpoints } from '../lib/apiConfig';
+import { endpoints, getAgentQueryUrl } from '../lib/apiConfig';
 import { queryAgent, uploadFile } from '../lib/apiClient';
 import { makePrettyIdLabel, validateAttachment, makeWelcomeText, normalizeNewlines, parseBotResponse } from '../lib/chatUtils';
 import useSessionId from '../hooks/useSessionId';
@@ -147,11 +147,17 @@ export default function AIAssistant() {
     if (!trimmed) return;
     setMessages((prev) => [...prev, { id: `msg-${Date.now()}`, sender: 'user', type: 'text', text: trimmed }]);
 
-    if (!endpoints.agentQuery) return;
+    if (!getAgentQueryUrl(selectedAgentId)) return;
     setMessages((prev) => [...prev, { id: `typing-${Date.now()}`, sender: 'bot', type: 'typing', text: '__typing__' }]);
 
     try {
-      const data = await queryAgent({ input: trimmed, agent: selectedAgentId, sessionId });
+      const data = await queryAgent({
+        input: trimmed,
+        agent: selectedAgentId,
+        sessionId,
+        filename: activeFile?.name,
+        // extraTools: [], // hook up here if you add UI for tool selection
+      });
       const botText = parseBotResponse(data);
       endTypingWith(botText);
     } catch (err) {
