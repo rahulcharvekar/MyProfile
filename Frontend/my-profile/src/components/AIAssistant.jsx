@@ -16,6 +16,7 @@ export default function AIAssistant() {
   const [messages, setMessages] = useState([]);
   const [attachedFile, setAttachedFile] = useState(null); // File | null (kept and sent with each message until cleared)
   const [activeFile, setActiveFile] = useState(null);     // { name: string }
+  const [useFileContext, setUseFileContext] = useState(false);
   // Selected agent is provided via URL param (from Welcome page).
   // We keep a small mapping for friendly labels and hints.
 
@@ -26,7 +27,7 @@ export default function AIAssistant() {
   const DEFAULT_AGENT_ID = import.meta.env.VITE_DEFAULT_AGENT_ID;
   const selectedAgentId = agentFromPathParam || agentFromUrl || (DEFAULT_AGENT_ID || "");
   const agentLabel = useMemo(() => makePrettyIdLabel(selectedAgentId), [selectedAgentId]);
-  const { label: agentLabelApi, description: agentDescription, welcomeMessage: agentWelcomeMessage, commands: agentCommands, isUploadEnabled } = useAgentMeta(selectedAgentId);
+  const { label: agentLabelApi, description: agentDescription, welcomeMessage: agentWelcomeMessage, isUploadEnabled } = useAgentMeta(selectedAgentId);
   const agentTitle = useMemo(() => agentLabelApi || agentLabel, [agentLabelApi, agentLabel]);
   const agentHint = useMemo(() => agentDescription || 'You are now chatting with the selected agent.', [agentDescription]);
   const isUploadDisabled = !isUploadEnabled;
@@ -43,6 +44,7 @@ export default function AIAssistant() {
     if (!isUploadEnabled) {
       setActiveFile(null);
       setAttachedFile(null);
+      setUseFileContext(false);
     }
   }, [isUploadEnabled]);
 
@@ -103,6 +105,7 @@ export default function AIAssistant() {
           (m.id === uploadMsgId && m.type === 'file') ? { ...m, file: { ...m.file, status: 'ready' } } : m
         ));
         setActiveFile({ name: file.name });
+        setUseFileContext(false);
         setAttachedFile(null);
 
         const status = data?.status || 'uploaded';
@@ -132,7 +135,10 @@ export default function AIAssistant() {
   };
 
   const onRemoveAttachment = () => setAttachedFile(null);
-  const clearActiveFile = () => setActiveFile(null);
+  const clearActiveFile = () => {
+    setActiveFile(null);
+    setUseFileContext(false);
+  };
 
   const endTypingWith = (text) => {
     setMessages((prev) => {
@@ -155,7 +161,7 @@ export default function AIAssistant() {
         input: trimmed,
         agent: selectedAgentId,
         sessionId,
-        filename: activeFile?.name,
+        filename: useFileContext && activeFile?.name ? activeFile.name : undefined,
         // extraTools: [], // hook up here if you add UI for tool selection
       });
       const botText = parseBotResponse(data);
@@ -253,15 +259,35 @@ export default function AIAssistant() {
             <Composer
               key={`composer-${selectedAgentId}`}
               isUploadDisabled={!isUploadEnabled}
-              agentCommands={agentCommands}
               onFileSelected={onFileSelected}
               onSend={onSend}
             />
             {!isUploadDisabled && attachedFile && (
               <div className="mt-2 text-xs text-gray-600">Attached: <span className="font-medium">{attachedFile.name}</span> <button type="button" onClick={onRemoveAttachment} className="ml-2 text-gray-400 hover:text-gray-700">✕</button></div>
             )}
+            {!isUploadDisabled && activeFile && !attachedFile && (
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-600">
+                <span className="font-medium truncate max-w-[12rem]">{activeFile.name}</span>
+                <label className="inline-flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={useFileContext}
+                    onChange={(e) => setUseFileContext(e.target.checked)}
+                    className="h-3 w-3"
+                  />
+                  <span>Use as context</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={clearActiveFile}
+                  className="text-gray-400 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
-        </div>
+          </div>
       </div>
     </div>
   );

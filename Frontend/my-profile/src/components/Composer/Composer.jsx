@@ -1,10 +1,8 @@
 import React, { useRef, useState } from 'react';
 import AttachButton from './AttachButton';
-import CommandSelector from './CommandSelector';
 
-export default function Composer({ isUploadDisabled, agentCommands = [], onFileSelected, onSend }) {
+export default function Composer({ isUploadDisabled, onFileSelected, onSend }) {
   const [input, setInput] = useState('');
-  const [selectedCommand, setSelectedCommand] = useState('');
   const textInputRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -25,15 +23,6 @@ export default function Composer({ isUploadDisabled, agentCommands = [], onFileS
     if (!trimmed) return;
     onSend?.(trimmed);
     setInput('');
-    setSelectedCommand('');
-  };
-
-  const handleCommandChange = (v) => {
-    setSelectedCommand(v);
-    if (v) {
-      setInput(`${v} `);
-      setTimeout(() => textInputRef.current?.focus(), 0);
-    }
   };
 
   return (
@@ -42,7 +31,6 @@ export default function Composer({ isUploadDisabled, agentCommands = [], onFileS
       {!isUploadDisabled && (
         <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv" className="hidden" onChange={onFileChange} />
       )}
-      <CommandSelector commands={agentCommands} value={selectedCommand} onChange={handleCommandChange} />
       <input
         ref={textInputRef}
         value={input}
@@ -60,4 +48,3 @@ export default function Composer({ isUploadDisabled, agentCommands = [], onFileS
     </form>
   );
 }
-

@@ -6,7 +6,6 @@ export default function useAgentMeta(agentId) {
     label: '',
     description: '',
     welcomeMessage: '',
-    commands: [],
     isUploadEnabled: true,
   });
 
@@ -30,7 +29,6 @@ export default function useAgentMeta(agentId) {
           label: entry.label || '',
           description: entry.description || '',
           welcomeMessage: entry.welcomeMessage || '',
-          commands: Array.isArray(entry.commands) ? entry.commands : [],
           isUploadEnabled: Boolean(isUploadEnabled),
         });
       } catch (_) {
@@ -43,4 +41,3 @@ export default function useAgentMeta(agentId) {
 
   return state;
 }
-
