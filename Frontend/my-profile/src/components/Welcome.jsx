@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listAgents } from '../lib/apiClient';
+import { getAgentRoutePath } from '../lib/agentRegistry';
 
 export default function Welcome() {
   const navigate = useNavigate();
@@ -31,20 +32,21 @@ export default function Welcome() {
   }, []);
 
   const onSelectAgent = (agentId) => {
-    navigate(`/ai/${encodeURIComponent(agentId)}`);
+    const target = getAgentRoutePath(agentId);
+    navigate(target);
   };
 
   // Helpers to normalize capability keys and labels consistently
-  const capKey = (s) => String(s || '')
+  const capKey = useCallback((s) => String(s || '')
     .toLowerCase()
     .replace(/[_-]+/g, ' ')
-    .trim();
-  const capLabel = (s) => {
+    .trim(), []);
+  const capLabel = useCallback((s) => {
     const raw = String(s || '');
     const lc = capKey(raw);
     if (lc === 'ai' || lc.includes('gpt') || lc.includes('llm')) return 'AI';
     return raw.replace(/[_-]+/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
-  };
+  }, [capKey]);
 
   // Compute available capability filters from loaded agents
   const allCaps = useMemo(() => {
@@ -71,7 +73,7 @@ export default function Welcome() {
       return a.label.localeCompare(b.label);
     });
     return arr;
-  }, [agents]);
+  }, [agents, capKey, capLabel]);
 
   const toggleCap = (key) => {
     setSelectedCaps((prev) => {
@@ -99,7 +101,7 @@ export default function Welcome() {
       }
       return true;
     });
-  }, [agents, selectedCaps]);
+  }, [agents, capKey, selectedCaps]);
 
   // Suggestions for capability query (typeahead)
   const capSuggestions = useMemo(() => {

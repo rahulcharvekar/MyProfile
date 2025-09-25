@@ -14,7 +14,7 @@ const originOf = (url) => {
   try {
     const u = new URL(url, window.location.origin);
     return `${u.protocol}//${u.host}`;
-  } catch (_) { return ''; }
+  } catch { return ''; }
 };
 let apiBase = '';
 if (rawBase) {
@@ -44,7 +44,7 @@ const buildUrl = (pathOrUrl) => {
   try {
     const u = new URL(pathOrUrl);
     return u.toString();
-  } catch (_) {
+  } catch {
     // not absolute
   }
   return apiBase ? noTrail(apiBase) + pathOrUrl : '';

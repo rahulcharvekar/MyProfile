@@ -40,6 +40,55 @@ const normalizeCapabilities = (entry) => {
   return cleaned;
 };
 
+const extractFileName = (entry) => {
+  if (!entry) return '';
+  if (typeof entry === 'string') return entry.trim();
+  if (typeof entry === 'object') {
+    const candidates = [
+      entry.filename,
+      entry.file_name,
+      entry.file,
+      entry.name,
+      entry.title,
+      entry.document_name,
+      entry.path,
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim()) {
+        return candidate.trim();
+      }
+    }
+    if (typeof entry.id === 'string' && entry.id.trim()) return entry.id.trim();
+    if (typeof entry.id === 'number') return String(entry.id);
+    return 'Untitled file';
+  }
+  return String(entry || '').trim();
+};
+
+const normalizeFileNames = (list) => {
+  if (!Array.isArray(list)) return [];
+  const names = list
+    .map((entry) => extractFileName(entry))
+    .filter((name) => Boolean(name) && name !== '{}');
+  return Array.from(new Set(names));
+};
+
+export const resolveUploadedFilename = (payload, fallbackName) => {
+  if (!payload) return fallbackName;
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim();
+    return trimmed || fallbackName;
+  }
+  const direct = extractFileName(payload);
+  if (direct && direct !== 'Untitled file') return direct;
+  if (Array.isArray(payload?.files) && payload.files.length > 0) {
+    const fromFiles = extractFileName(payload.files[0]);
+    if (fromFiles && fromFiles !== 'Untitled file') return fromFiles;
+  }
+  if (payload.data) return resolveUploadedFilename(payload.data, fallbackName);
+  return fallbackName;
+};
+
 // simple in-memory cache for agent list
 let _agentsCache = null; // { at: number, value: { raw, list, byId } }
 const AGENTS_TTL_MS = 60_000; // 60s
@@ -53,7 +102,7 @@ export async function listAgents(signal, { force = false } = {}) {
 
   const res = await fetch(endpoints.agentList, { signal });
   let data = null;
-  try { data = await res.json(); } catch (_) { /* noop */ }
+  try { data = await res.json(); } catch { /* noop */ }
   if (!res.ok) {
     return { raw: data, list: [], byId: {} };
   }
@@ -99,26 +148,32 @@ export async function resolveAgentPath(agent) {
     const raw = entry.raw || {};
     const seg = raw.path || raw.slug || raw.name || entry.id || agent;
     return String(seg);
-  } catch (_) {
+  } catch {
     return String(agent);
   }
 }
 
-export async function queryAgent({ input, agent, sessionId, extraTools, filename }, signal) {
+export async function queryAgent({ input, agent, sessionId, extraTools, filename, files, payloadMode = 'default' }, signal) {
   const agentSeg = await resolveAgentPath(agent);
   const url = getAgentQueryUrl(agentSeg) || endpoints.agentQuery;
   if (!url) throw new Error('Agent query endpoint not configured');
-  const payload = {
-    // New API fields
-    input,
-    session_id: sessionId,
-    // Optional compatibility fields when servers expect older names
-    // (kept harmless; many servers ignore unknown keys)
-    input_text: input,
-    agent_name: agent,
-  };
-  if (Array.isArray(extraTools)) payload.extra_tools = extraTools;
-  if (filename !== undefined) payload.filename = filename;
+  const useMinimalPayload = payloadMode === 'minimal';
+  let payload;
+  if (useMinimalPayload) {
+    payload = { input };
+    if (filename !== undefined) payload.filename = filename;
+  } else {
+    payload = {
+      input,
+      input_text: input,
+      agent_name: agent,
+    };
+    if (sessionId) payload.session_id = sessionId;
+    if (Array.isArray(extraTools)) payload.extra_tools = extraTools;
+    if (filename !== undefined) payload.filename = filename;
+    if (Array.isArray(files) && files.length > 0) payload.files = files;
+  }
+  console.log(payload)
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -126,10 +181,10 @@ export async function queryAgent({ input, agent, sessionId, extraTools, filename
     signal,
   });
   let data = null;
-  try { data = await res.json(); } catch (_) { /* noop */ }
+  try { data = await res.json(); } catch { /* noop */ }
   if (!res.ok) {
     let textFallback = '';
-    try { textFallback = await res.text(); } catch (_) { /* noop */ }
+    try { textFallback = await res.text(); } catch { /* noop */ }
     const errText = data?.error || data?.message || textFallback || 'Request failed';
     const err = new Error(String(errText));
     err.data = data;
@@ -146,14 +201,14 @@ export async function uploadFile(file, { agent, signal } = {}) {
   let url;
   try {
     url = new URL(endpoints.uploadSimple, window.location.origin);
-  } catch (_) {
+  } catch {
     // Fallback: assume relative path
     url = new URL(String(endpoints.uploadSimple || '/'), window.location.origin);
   }
   if (agent) url.searchParams.set('agent', String(agent));
   const res = await fetch(url.toString(), { method: 'POST', body: formData, signal });
   let data = null;
-  try { data = await res.json(); } catch (_) { /* noop */ }
+  try { data = await res.json(); } catch { /* noop */ }
   if (!res.ok) {
     const err = new Error(String(data?.error || data?.message || 'Upload failed'));
     err.data = data;
@@ -168,11 +223,13 @@ export async function listAgentFiles(agent, signal) {
   if (!url) return [];
   const res = await fetch(url, { method: 'GET', signal });
   let data = null;
-  try { data = await res.json(); } catch (_) { /* noop */ }
+  try { data = await res.json(); } catch { /* noop */ }
   if (!res.ok) return [];
   // Normalize return to array of strings (filenames)
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.files)) return data.files;
-  if (Array.isArray(data?.data?.files)) return data.data.files;
+  if (Array.isArray(data)) return normalizeFileNames(data);
+  if (Array.isArray(data?.files)) return normalizeFileNames(data.files);
+  if (Array.isArray(data?.data?.files)) return normalizeFileNames(data.data.files);
+  const guess = normalizeFileNames(Object.values(data || {}));
+  if (guess.length) return guess;
   return [];
 }

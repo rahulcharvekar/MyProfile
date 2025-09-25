@@ -16,7 +16,7 @@ export const getOrCreateSessionId = (key = 'ai_session_id') => {
     const sid = `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     localStorage.setItem(key, sid);
     return sid;
-  } catch (_) {
+  } catch {
     return `web-${Date.now()}`;
   }
 };
@@ -46,4 +46,3 @@ export const parseBotResponse = (data) => {
   if (data?.message) return data.message;
   return '✅ Done.';
 };
-

@@ -3,8 +3,8 @@ import React from "react";
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Header from "./Header";
 import Footer from "./Footer";
-import AIAssistant from "./AIAssistant";
 import Welcome from "./Welcome";
+import DocHelpAgent from "./agents/DocHelpAgent";
 
 // No header menu — use deep links or Welcome actions
 
@@ -30,7 +30,7 @@ export default function MainPage() {
           <Routes>
             <Route path="/" element={<Navigate to="/welcome" replace />} />
             <Route path="/welcome" element={<Welcome />} />
-            <Route path="/ai/:agentId" element={<AIAssistant />} />            
+            <Route path="/dochelp/*" element={<DocHelpAgent />} />         
             {/* Additional routes can be added here if needed */}
             <Route path="*" element={<Navigate to="/welcome" replace />} />
           </Routes>

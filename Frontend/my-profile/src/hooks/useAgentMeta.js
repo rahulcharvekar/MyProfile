@@ -31,7 +31,7 @@ export default function useAgentMeta(agentId) {
           welcomeMessage: entry.welcomeMessage || '',
           isUploadEnabled: Boolean(isUploadEnabled),
         });
-      } catch (_) {
+      } catch {
         // ignore
       }
     };
