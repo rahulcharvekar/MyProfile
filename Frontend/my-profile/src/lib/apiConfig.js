@@ -27,10 +27,13 @@ if (rawBase) {
 
 // Allow overriding endpoint paths; otherwise use conventional paths
 // For agent-specific endpoints, use templates with {agent}
-const EP_QUERY_PATH_TMPL = trim(V.VITE_ENDPOINT_AGENT_QUERY) || '/agent/{agent}/query';
+const EP_QUERY_PATH_TMPL = trim(V.VITE_ENDPOINT_AGENT_QUERY) || '/agent/query/{agent}';
 const EP_LIST_PATH = trim(V.VITE_ENDPOINT_AGENT_LIST) || '/agent/list';
-const EP_FILES_PATH_TMPL = trim(V.VITE_ENDPOINT_AGENT_FILES) || '/agent/{agent}/listfiles';
-const EP_UPLOAD_PATH = trim(V.VITE_ENDPOINT_UPLOAD_SIMPLE) || '/upload/simple';
+const EP_FILES_PATH_TMPL = trim(V.VITE_ENDPOINT_AGENT_FILES) || '/agent/listfiles/{agent}';
+const EP_UPLOAD_PATH_TMPL = trim(V.VITE_ENDPOINT_AGENT_UPLOAD)
+  || trim(V.VITE_ENDPOINT_UPLOAD_SIMPLE)
+  || '/agent/upload/{agent}';
+const EP_PROFILE_CHAT_TMPL = trim(V.VITE_ENDPOINT_AGENT_PROFILE_CHAT) || '/agent/profilechat/{agent}';
 // Allow explicit full URLs to override everything (only via dedicated vars)
 // If you set VITE_AGENT_QUERY_URL, it will be used as-is (and may include {agent}); otherwise we append paths to apiBase
 const explicitListUrl = trim(V.VITE_AGENT_LIST_URL);
@@ -56,7 +59,9 @@ export const endpoints = {
     ? explicitQueryUrl
     : '',
   agentList: explicitListUrl || (apiBase ? apiBase + EP_LIST_PATH : ''),
-  uploadSimple: explicitUploadUrl || (apiBase ? apiBase + EP_UPLOAD_PATH : ''),
+  uploadSimple: explicitUploadUrl && !explicitUploadUrl.includes('{agent}')
+    ? explicitUploadUrl
+    : '',
 };
 
 export const getAgentQueryUrl = (agent) => {
@@ -73,6 +78,22 @@ export const getAgentQueryUrl = (agent) => {
 
 export const getAgentListFilesUrl = (agent) => {
   const path = replaceAgent(EP_FILES_PATH_TMPL, agent);
+  return buildUrl(path);
+};
+
+export const getAgentUploadUrl = (agent) => {
+  if (explicitUploadUrl) {
+    const src = explicitUploadUrl.includes('{agent}')
+      ? replaceAgent(explicitUploadUrl, agent)
+      : explicitUploadUrl;
+    return src;
+  }
+  const path = replaceAgent(EP_UPLOAD_PATH_TMPL, agent);
+  return buildUrl(path);
+};
+
+export const getAgentProfileChatUrl = (agent) => {
+  const path = replaceAgent(EP_PROFILE_CHAT_TMPL, agent);
   return buildUrl(path);
 };
 

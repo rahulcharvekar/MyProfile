@@ -2,6 +2,9 @@ export const agentRegistry = {
   dochelp: {
     path: '/dochelp',
   },
+  recruiter: {
+    path: '/recruiter',
+  },
 };
 
 export const getAgentRoutePath = (agentId) => {

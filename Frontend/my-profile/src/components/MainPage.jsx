@@ -5,6 +5,7 @@ import Header from "./Header";
 import Footer from "./Footer";
 import Welcome from "./Welcome";
 import DocHelpAgent from "./agents/DocHelpAgent";
+import RecruiterAgent from "./agents/RecruiterAgent";
 
 // No header menu — use deep links or Welcome actions
 
@@ -30,7 +31,8 @@ export default function MainPage() {
           <Routes>
             <Route path="/" element={<Navigate to="/welcome" replace />} />
             <Route path="/welcome" element={<Welcome />} />
-            <Route path="/dochelp/*" element={<DocHelpAgent />} />         
+            <Route path="/dochelp/*" element={<DocHelpAgent />} />
+            <Route path="/recruiter/*" element={<RecruiterAgent />} />
             {/* Additional routes can be added here if needed */}
             <Route path="*" element={<Navigate to="/welcome" replace />} />
           </Routes>

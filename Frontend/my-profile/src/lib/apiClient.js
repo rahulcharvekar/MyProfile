@@ -1,4 +1,4 @@
-import { endpoints, getAgentQueryUrl, getAgentListFilesUrl } from './apiConfig';
+import { endpoints, getAgentQueryUrl, getAgentListFilesUrl, getAgentUploadUrl, getAgentProfileChatUrl } from './apiConfig';
 
 const toPrettyLabel = (idOrName) => String(idOrName || '')
   .replace(/[_-]+/g, ' ')
@@ -162,6 +162,8 @@ export async function queryAgent({ input, agent, sessionId, extraTools, filename
   if (useMinimalPayload) {
     payload = { input };
     if (filename !== undefined) payload.filename = filename;
+    if (sessionId) payload.session_id = sessionId;
+    if (Array.isArray(files) && files.length > 0) payload.files = files;
   } else {
     payload = {
       input,
@@ -193,20 +195,47 @@ export async function queryAgent({ input, agent, sessionId, extraTools, filename
   return data;
 }
 
+export async function profileChatAgent({ input, query, agent, sessionId, filename, extraTools }, signal) {
+  const agentSeg = await resolveAgentPath(agent);
+  const url = getAgentProfileChatUrl(agentSeg);
+  if (!url) throw new Error('Profile chat endpoint not configured');
+  const payload = {};
+  if (query || input) payload.query = query ?? input;
+  if (sessionId) payload.session_id = sessionId;
+  if (filename) payload.filename = filename;
+  if (extraTools !== undefined) payload.extra_tools = extraTools;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* noop */ }
+  if (!res.ok) {
+    let textFallback = '';
+    try { textFallback = await res.text(); } catch { /* noop */ }
+    const errText = data?.error || data?.message || textFallback || 'Request failed';
+    const err = new Error(String(errText));
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
 export async function uploadFile(file, { agent, signal } = {}) {
-  if (!endpoints.uploadSimple) throw new Error('Upload endpoint not configured');
   const formData = new FormData();
   formData.append('file', file, file.name);
-  // Build URL and append optional agent query param
-  let url;
+  const agentSeg = agent ? await resolveAgentPath(agent) : '';
+  const rawUrl = getAgentUploadUrl(agentSeg) || endpoints.uploadSimple;
+  if (!rawUrl) throw new Error('Upload endpoint not configured');
+  let url = rawUrl;
   try {
-    url = new URL(endpoints.uploadSimple, window.location.origin);
+    url = new URL(rawUrl, window.location.origin).toString();
   } catch {
-    // Fallback: assume relative path
-    url = new URL(String(endpoints.uploadSimple || '/'), window.location.origin);
+    url = rawUrl;
   }
-  if (agent) url.searchParams.set('agent', String(agent));
-  const res = await fetch(url.toString(), { method: 'POST', body: formData, signal });
+  const res = await fetch(url, { method: 'POST', body: formData, signal });
   let data = null;
   try { data = await res.json(); } catch { /* noop */ }
   if (!res.ok) {
